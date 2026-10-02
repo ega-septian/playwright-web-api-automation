@@ -21,19 +21,20 @@ API test automation with **Playwright**, **TypeScript**, and **Zod**, covering t
 ```
 tests/
 ├── api/
-│   ├── schemas/          # Zod schemas: the expected shape of each response
-│   │   ├── user.schema.ts
-│   │   └── booker.schema.ts
-│   ├── types/            # TypeScript types for request payloads
-│   │   ├── user.types.ts
-│   │   └── booker.types.ts
-│   ├── data/             # Test data factories with default values + overrides
-│   │   ├── user.data.ts
-│   │   └── booker.data.ts
-│   ├── users.spec.ts     # GoRest tests
-│   └── booker.spec.ts    # Restful-Booker tests
-└── web/                  # UI tests
+│   ├── gorest/                   # One folder per API, each with the same layout
+│   │   ├── schemas/user.schema.ts   # Zod schemas: the expected shape of each response
+│   │   ├── types/user.types.ts      # TypeScript types for request payloads
+│   │   ├── data/user.data.ts        # Test data factories with default values + overrides
+│   │   └── users.spec.ts
+│   └── booker/
+│       ├── schemas/booker.schema.ts
+│       ├── types/booker.types.ts
+│       ├── data/booker.data.ts
+│       └── booker.spec.ts
+└── web/                          # UI tests
 ```
+
+Each API is a separate Playwright project in `playwright.config.ts` with its own `testDir` and `baseURL`. Adding a new API means adding a folder with the same layout and one project entry.
 
 ## Getting Started
 

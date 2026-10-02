@@ -33,16 +33,14 @@ export default defineConfig({
     },
     {
       name: "gorest",
-      testDir: "./tests/api",
-      testMatch: "users.spec.ts",
+      testDir: "./tests/api/gorest",
       use: {
         baseURL: "https://gorest.co.in",
       },
     },
     {
       name: "booker",
-      testDir: "./tests/api",
-      testMatch: "booker.spec.ts",
+      testDir: "./tests/api/booker",
       use: {
         baseURL: "https://restful-booker.herokuapp.com",
       },

@@ -1,0 +1,22 @@
+{
+  "name": "coba2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test:api": "playwright test --project=gorest --project=booker"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@faker-js/faker": "^10.6.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.3",
+    "dotenv": "^18.0.5"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

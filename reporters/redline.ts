@@ -7,6 +7,7 @@
  *   REDLINE_APP_VERSION  versi backend, misalnya sprint5-with-bugs
  *   REDLINE_AI=1         analisis penyebab kegagalan
  *   REDLINE_AI_MAX       default 10
+ *   REDLINE_TRIGGERED_BY nama yang menjalankan, default user laptop atau ci:<GITHUB_ACTOR>
  *
  * ID test case diambil dari tag: test("...", { tag: "@TC-USR-001" }, ...)
  * Kegagalan dikelompokkan per insiden (penyebab sama); analisis dan REDLINE_AI_MAX dihitung per insiden.
@@ -14,6 +15,7 @@
  */
 import type { FullConfig, FullResult, Reporter, TestCase, TestResult } from "@playwright/test/reporter";
 import { execSync } from "node:child_process";
+import { userInfo } from "node:os";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { sourceHash } from "./source-hash";
@@ -47,6 +49,7 @@ type IngestResult = {
   regressed: GroupChange[];
   resolved: GroupChange[];
   incidents?: Incident[]; // kosong di server Redline versi lama
+  shared_status?: boolean; // false: run ini hanya pratinjau, status bersama tidak diubah
 };
 type Status = "BARU" | "REGRESSED" | "MASIH GAGAL";
 type Row = { id: string; group: GroupChange; status: Status };
@@ -123,6 +126,9 @@ export default class RedlineReporter implements Reporter {
     if (commit) params.set("commit", commit);
     if (branch) params.set("branch", branch);
     if (process.env.REDLINE_APP_VERSION) params.set("app_version", process.env.REDLINE_APP_VERSION);
+    params.set("triggered_by", triggeredBy());
+    const ciURL = githubRunURL();
+    if (ciURL) params.set("ci_url", ciURL);
 
     let res: Response;
     try {
@@ -153,11 +159,12 @@ export default class RedlineReporter implements Reporter {
     const resolved = summary.resolved.map((g) => ({ id: idOf(g), test: g.test }));
 
     const mdFile = path.join(path.dirname(file), "redline-report.md");
-    const md = markdownReport(summary, incidents, resolved, baseURL, cost);
+    const when = jakartaTime(result.startTime);
+    const md = markdownReport(summary, incidents, resolved, baseURL, cost, when);
     writeFileSync(mdFile, md);
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + "\n");
 
-    console.log(terminalReport(summary, incidents, resolved, path.relative(process.cwd(), mdFile), cost));
+    console.log(terminalReport(summary, incidents, resolved, path.relative(process.cwd(), mdFile), cost, when));
     if (!ai && rows.length > 0) log("jalankan dengan REDLINE_AI=1 untuk analisis penyebab kegagalan.");
   }
 
@@ -169,6 +176,24 @@ export default class RedlineReporter implements Reporter {
     const outputFile = (json?.[1] as { outputFile?: string } | undefined)?.outputFile;
     return outputFile ? path.resolve(configDir, outputFile) : undefined;
   }
+}
+
+function triggeredBy(): string {
+  if (process.env.REDLINE_TRIGGERED_BY) return process.env.REDLINE_TRIGGERED_BY;
+  if (process.env.CI) return process.env.GITHUB_ACTOR ? `ci:${process.env.GITHUB_ACTOR}` : "ci";
+  try {
+    return userInfo().username;
+  } catch {
+    return "";
+  }
+}
+
+/** Halaman run GitHub Actions: berisi log dan artifact (trace, screenshot). */
+function githubRunURL(): string {
+  const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID } = process.env;
+  return GITHUB_SERVER_URL && GITHUB_REPOSITORY && GITHUB_RUN_ID
+    ? `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}`
+    : "";
 }
 
 function git(args: string): string {
@@ -281,8 +306,36 @@ function category(v: IncidentView): string {
 
 const TERMINAL_MAX = 15;
 
-function terminalReport(r: IngestResult, incidents: IncidentView[], resolved: { id: string; test: string }[], mdFile: string, cost: number): string {
-  const out = [`\n[redline] run #${r.run_id}: ${r.passed} lulus, ${r.failed} gagal, ${r.flaky} flaky, ${r.skipped} skip`];
+/** Waktu dalam WIB, apa pun zona waktu mesin yang menjalankan test. */
+function jakartaTime(d: Date): string {
+  const f = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${f.format(d)} WIB`;
+}
+
+const PREVIEW_NOTE = "Run lokal: hanya pratinjau, status bersama tim tidak diubah (hanya run CI yang mengubahnya).";
+
+function isPreview(r: IngestResult): boolean {
+  return r.shared_status === false;
+}
+
+function terminalReport(
+  r: IngestResult,
+  incidents: IncidentView[],
+  resolved: { id: string; test: string }[],
+  mdFile: string,
+  cost: number,
+  when: string,
+): string {
+  const out = [`\n[redline] run #${r.run_id} · ${when}: ${r.passed} lulus, ${r.failed} gagal, ${r.flaky} flaky, ${r.skipped} skip`];
+  if (isPreview(r)) out.push(`  ${PREVIEW_NOTE}`);
   if (incidents.length > 0) {
     const failedTests = incidents.reduce((n, v) => n + v.rows.length, 0);
     if (incidents.length < failedTests) out.push(`  ${failedTests} kegagalan dari ${incidents.length} penyebab`);
@@ -321,13 +374,21 @@ function cell(s: string): string {
 
 const DETAILS_FROM = 10;
 
-function markdownReport(r: IngestResult, incidents: IncidentView[], resolved: { id: string; test: string }[], baseURL: string, cost: number): string {
+function markdownReport(
+  r: IngestResult,
+  incidents: IncidentView[],
+  resolved: { id: string; test: string }[],
+  baseURL: string,
+  cost: number,
+  when: string,
+): string {
   const md = [
     `# Redline: run #${r.run_id}`,
     "",
-    `**${r.passed}** lulus · **${r.failed}** gagal · **${r.flaky}** flaky · **${r.skipped}** skip`,
+    `${when} · **${r.passed}** lulus · **${r.failed}** gagal · **${r.flaky}** flaky · **${r.skipped}** skip`,
     "",
   ];
+  if (isPreview(r)) md.push(`> ℹ️ ${PREVIEW_NOTE}`, "");
   if (incidents.length === 0) {
     md.push("✅ Tidak ada kegagalan.", "");
   } else {

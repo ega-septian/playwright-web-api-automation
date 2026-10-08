@@ -9,3 +9,6 @@ node_modules/
 
 # Environment variables (berisi token, jangan di-commit)
 .env
+
+# macOS
+.DS_Store

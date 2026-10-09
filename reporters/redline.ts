@@ -96,6 +96,8 @@ export default class RedlineReporter implements Reporter {
   private hashes: Record<string, string> = {};
   /** "file:line" -> file lokal yang dipakai test (peta kode), relatif terhadap project. */
   private files: Record<string, string[]> = {};
+  /** Isi file kode test yang gagal (path relatif -> isi), supaya AI bisa membaca kodenya. */
+  private sources: Record<string, string> = {};
   /** "project › file › judul" (format server) -> ID dari tag @TC-... */
   private ids: Record<string, string> = {};
   /** "project › file › judul" -> curl dari fixture Redline, hanya untuk test yang gagal. */
@@ -134,6 +136,22 @@ export default class RedlineReporter implements Reporter {
       this.files[key] = sourceFiles(file).map((f) =>
         path.relative(root, f).split(path.sep).join("/"),
       );
+    }
+    if (result.status !== "passed" && result.status !== "skipped") this.addSources(file);
+  }
+
+  /** Simpan isi file spec dan file lokal yang di-import (maksimal 50 KB per file). Disamarkan di server. */
+  private addSources(specFile: string) {
+    const root = this.config?.configFile ? path.dirname(this.config.configFile) : process.cwd();
+    for (const abs of sourceFiles(specFile)) {
+      const rel = path.relative(root, abs).split(path.sep).join("/");
+      if (rel in this.sources) continue;
+      try {
+        const content = readFileSync(abs, "utf8");
+        if (content.length <= 50_000) this.sources[rel] = content;
+      } catch {
+        // file tidak terbaca: analisis tetap jalan tanpa kodenya
+      }
     }
   }
 
@@ -178,7 +196,7 @@ export default class RedlineReporter implements Reporter {
       res = await fetch(`${baseURL}/api/runs?${params}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: `{"playwright":${readFileSync(file, "utf8")},"test_hashes":${JSON.stringify(this.hashes)},"test_files":${JSON.stringify(this.files)}}`,
+        body: `{"playwright":${readFileSync(file, "utf8")},"test_hashes":${JSON.stringify(this.hashes)},"test_files":${JSON.stringify(this.files)},"sources":${JSON.stringify(this.sources)}}`,
         signal: AbortSignal.timeout(15_000),
       });
     } catch (e) {
@@ -277,6 +295,7 @@ function writeLastRun(file: string, url: string, r: IngestResult, incidents: Inc
     fingerprint: v.representative.group.fingerprint,
     test: v.representative.group.test,
     id: v.representative.id,
+    ids: v.rows.map((r) => r.id), // semua test di insiden ini (penyebab sama)
     status: v.representative.status,
     affected: v.rows.length,
   }));

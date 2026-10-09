@@ -11,7 +11,7 @@
  *
  * Skenario:
  *   history  semua spec dijalankan bersih dulu, jadi Redline punya pembanding (matriks perubahan)
- *   cold     tanpa riwayat, seperti test yang baru ditulis
+ *   cold     test target belum pernah lulus (test baru), test lain punya riwayat
  * Setiap skenario memakai server Redline sendiri dengan schema database terpisah (bench_<skenario>),
  * jadi data Redline yang biasa tidak tercampur.
  *
@@ -22,7 +22,7 @@
  *      BENCH_REDLINE_PORT (8788), BENCH_PROXY_PORT (8095)
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -97,7 +97,7 @@ function transform(value: unknown, m: ProxyMutation): unknown {
   return out;
 }
 
-function startProxy(): http.Server {
+function startProxy(): Promise<http.Server> {
   const server = http.createServer(async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const c of req) chunks.push(c as Buffer);
@@ -143,8 +143,18 @@ function startProxy(): http.Server {
       res.end(`proxy benchmark: ${(e as Error).message}`);
     }
   });
-  server.listen(PROXY_PORT);
-  return server;
+  return new Promise((resolve, reject) => {
+    server.once("error", (e: NodeJS.ErrnoException) =>
+      reject(
+        e.code === "EADDRINUSE"
+          ? new Error(
+              `port ${PROXY_PORT} sedang dipakai. Benchmark lain masih jalan? (atur BENCH_PROXY_PORT)`,
+            )
+          : e,
+      ),
+    );
+    server.listen(PROXY_PORT, () => resolve(server));
+  });
 }
 
 // ---------- server Redline khusus benchmark ----------
@@ -160,6 +170,16 @@ function buildServer(): string {
 }
 
 async function startServer(bin: string, scenario: string, memory: boolean): Promise<ChildProcess> {
+  if (
+    await fetch(`${SERVER_URL}/healthz`).then(
+      () => true,
+      () => false,
+    )
+  ) {
+    throw new Error(
+      `port ${SERVER_PORT} sedang dipakai. Benchmark lain masih jalan? (atur BENCH_REDLINE_PORT)`,
+    );
+  }
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PORT: String(SERVER_PORT),
@@ -200,7 +220,7 @@ async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
 
 // ---------- menjalankan spec di salinan ----------
 
-type LastRun = { failures: { fingerprint: string; test: string }[] };
+type LastRun = { failures: { fingerprint: string; test: string; ids?: string[] }[] };
 
 // Async: proxy berjalan di proses ini, jadi event loop tidak boleh diblokir selama Playwright jalan.
 async function runSpecs(sandbox: string, grep: string | null, baseURL?: string): Promise<LastRun> {
@@ -246,6 +266,30 @@ function applyEdit(sandbox: string, edit: NonNullable<Case["edit"]>) {
   );
 }
 
+/**
+ * Cold start: judul test target diberi akhiran unik per kasus, jadi bagi Redline test itu baru
+ * (belum pernah lulus). Test lain tetap punya riwayat, seperti menambah test baru ke suite yang sudah ada.
+ */
+function makeTargetNew(sandbox: string, tag: string, caseId: string) {
+  const dir = path.join(sandbox, "redline-bench", "specs");
+  const re = new RegExp(`test\\(\\s*"([^"]+)",(\\s*)\\{ tag: "${tag}" \\}`);
+  for (const name of readdirSync(dir)) {
+    const file = path.join(dir, name);
+    const src = readFileSync(file, "utf8");
+    if (re.test(src)) {
+      writeFileSync(
+        file,
+        src.replace(
+          re,
+          (_, title, space) => `test("${title} [${caseId}]",${space}{ tag: "${tag}" }`,
+        ),
+      );
+      return;
+    }
+  }
+  throw new Error(`test dengan tag ${tag} tidak ditemukan`);
+}
+
 async function runCase(
   sandbox: string,
   scenario: string,
@@ -262,12 +306,15 @@ async function runCase(
   };
   try {
     if (c.edit) applyEdit(sandbox, c.edit);
+    if (scenario === "cold") makeTargetNew(sandbox, c.test, c.id);
     mutation = c.proxy ?? null;
-    const run = await runSpecs(sandbox, c.test, c.baseURL);
-    if (run.failures.length === 0)
-      return { ...base, status: "not_failed", note: "bug tidak membuat test gagal" };
-
-    const fp = run.failures[0].fingerprint;
+    // Seluruh suite dijalankan (bukan hanya test target) supaya peta kode terisi seperti pemakaian nyata.
+    const run = await runSpecs(sandbox, null, c.baseURL);
+    const target = run.failures.find((f) => f.ids?.includes(c.test.slice(1)));
+    if (!target)
+      return { ...base, status: "not_failed", note: "bug tidak membuat test target gagal" };
+    // Insiden yang berisi test target dianalisis lewat wakilnya: penyebabnya sama.
+    const fp = target.fingerprint;
     const { analysis: a } = await api<{ analysis: Analysis }>(
       "POST",
       `/api/groups/${fp}/analyze?force=1`,
@@ -368,7 +415,14 @@ async function main() {
   const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
   const only = arg("only")?.split(",");
   const scenarios = arg("scenario") ? [arg("scenario")!] : ["history", "cold"];
-  const memory = arg("memory") !== "off";
+  for (const s of scenarios) {
+    if (s !== "history" && s !== "cold")
+      throw new Error(`--scenario harus history atau cold, bukan "${s}"`);
+  }
+  const memoryArg = arg("memory") ?? "on";
+  if (memoryArg !== "on" && memoryArg !== "off")
+    throw new Error(`--memory harus on atau off, bukan "${memoryArg}"`);
+  const memory = memoryArg === "on";
   const cases = (
     JSON.parse(readFileSync(path.join(ROOT, "redline-bench", "cases.json"), "utf8")) as Case[]
   ).filter((c) => !only || only.includes(c.id));
@@ -377,7 +431,7 @@ async function main() {
     `Benchmark Redline: ${cases.length} kasus × ${scenarios.length} skenario, ingatan ${memory ? "on" : "off"}`,
   );
   const bin = buildServer();
-  const proxy = startProxy();
+  const proxy = await startProxy();
   const sandbox = makeSandbox(ROOT);
   const results: Result[] = [];
   try {

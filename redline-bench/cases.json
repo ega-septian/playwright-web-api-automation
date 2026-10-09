@@ -2,7 +2,7 @@
   {
     "id": "T01",
     "truth": "test_bug",
-    "test": "@BENCH-01",
+    "test": "@TC-BENCH-01",
     "about": "lupa await response.json()",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -13,7 +13,7 @@
   {
     "id": "T02",
     "truth": "test_bug",
-    "test": "@BENCH-01",
+    "test": "@TC-BENCH-01",
     "about": "schema objek dipakai untuk response array",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -24,7 +24,7 @@
   {
     "id": "T03",
     "truth": "test_bug",
-    "test": "@BENCH-02",
+    "test": "@TC-BENCH-02",
     "about": "schema bersama salah tipe (id string)",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -35,7 +35,7 @@
   {
     "id": "T04",
     "truth": "test_bug",
-    "test": "@BENCH-03",
+    "test": "@TC-BENCH-03",
     "about": "status yang diharapkan salah (200, padahal create = 201)",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -46,7 +46,7 @@
   {
     "id": "T05",
     "truth": "test_bug",
-    "test": "@BENCH-03",
+    "test": "@TC-BENCH-03",
     "about": "matcher terlalu ketat (toEqual, padahal response punya id)",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -57,7 +57,7 @@
   {
     "id": "T06",
     "truth": "test_bug",
-    "test": "@BENCH-02",
+    "test": "@TC-BENCH-02",
     "about": "salah ketik path endpoint (/brand/1)",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -68,7 +68,7 @@
   {
     "id": "T07",
     "truth": "test_bug",
-    "test": "@BENCH-05",
+    "test": "@TC-BENCH-05",
     "about": "pesan error yang diharapkan salah",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -79,7 +79,7 @@
   {
     "id": "T08",
     "truth": "test_bug",
-    "test": "@BENCH-03",
+    "test": "@TC-BENCH-03",
     "about": "data test kurang field wajib (slug)",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -90,7 +90,7 @@
   {
     "id": "T09",
     "truth": "test_bug",
-    "test": "@BENCH-04",
+    "test": "@TC-BENCH-04",
     "about": "salah bentuk body error (body.errors.name)",
     "edit": {
       "file": "redline-bench/specs/brands.spec.ts",
@@ -101,7 +101,7 @@
   {
     "id": "T10",
     "truth": "test_bug",
-    "test": "@BENCH-08",
+    "test": "@TC-BENCH-08",
     "about": "salah nama field bersarang (brand_slug)",
     "edit": {
       "file": "redline-bench/specs/catalog.spec.ts",
@@ -112,7 +112,7 @@
   {
     "id": "T11",
     "truth": "test_bug",
-    "test": "@BENCH-07",
+    "test": "@TC-BENCH-07",
     "about": "mengira response dibungkus { data }",
     "edit": {
       "file": "redline-bench/specs/catalog.spec.ts",
@@ -123,7 +123,7 @@
   {
     "id": "T12",
     "truth": "test_bug",
-    "test": "@BENCH-06",
+    "test": "@TC-BENCH-06",
     "about": "schema lupa nullable (parent_id null)",
     "edit": {
       "file": "redline-bench/specs/catalog.spec.ts",
@@ -134,7 +134,7 @@
   {
     "id": "B01",
     "truth": "backend_bug",
-    "test": "@BENCH-01",
+    "test": "@TC-BENCH-01",
     "about": "GET /brands membalas 500",
     "proxy": {
       "method": "GET",
@@ -146,42 +146,42 @@
   {
     "id": "B02",
     "truth": "backend_bug",
-    "test": "@BENCH-01",
+    "test": "@TC-BENCH-01",
     "about": "GET /brands kehilangan field slug",
     "proxy": { "method": "GET", "path": "/brands", "drop": "slug" }
   },
   {
     "id": "B03",
     "truth": "backend_bug",
-    "test": "@BENCH-08",
+    "test": "@TC-BENCH-08",
     "about": "GET /products/1 price jadi string",
     "proxy": { "method": "GET", "path": "/products/1", "stringify": "price" }
   },
   {
     "id": "B04",
     "truth": "backend_bug",
-    "test": "@BENCH-03",
+    "test": "@TC-BENCH-03",
     "about": "POST /brands membalas 200, bukan 201",
     "proxy": { "method": "POST", "path": "/brands", "status": 200 }
   },
   {
     "id": "B05",
     "truth": "backend_bug",
-    "test": "@BENCH-05",
+    "test": "@TC-BENCH-05",
     "about": "brand yang tidak ada membalas 200 {}",
     "proxy": { "method": "GET", "path": "/brands/99999", "status": 200, "body": {} }
   },
   {
     "id": "B06",
     "truth": "backend_bug",
-    "test": "@BENCH-06",
+    "test": "@TC-BENCH-06",
     "about": "GET /categories mengganti nama parent_id jadi parentId",
     "proxy": { "method": "GET", "path": "/categories", "rename": ["parent_id", "parentId"] }
   },
   {
     "id": "B07",
     "truth": "backend_bug",
-    "test": "@BENCH-04",
+    "test": "@TC-BENCH-04",
     "about": "validasi create brand membalas 500",
     "proxy": {
       "method": "POST",
@@ -193,35 +193,35 @@
   {
     "id": "B08",
     "truth": "backend_bug",
-    "test": "@BENCH-07",
+    "test": "@TC-BENCH-07",
     "about": "GET /categories/tree kehilangan sub_categories",
     "proxy": { "method": "GET", "path": "/categories/tree", "drop": "sub_categories" }
   },
   {
     "id": "B09",
     "truth": "backend_bug",
-    "test": "@BENCH-02",
+    "test": "@TC-BENCH-02",
     "about": "GET /brands/1 mengembalikan brand lain (id 2), bentuk sama",
     "proxy": { "method": "GET", "path": "/brands/1", "set": { "id": 2 } }
   },
   {
     "id": "E01",
     "truth": "environment",
-    "test": "@BENCH-01",
+    "test": "@TC-BENCH-01",
     "about": "port salah: server tidak bisa dihubungi",
     "baseURL": "http://localhost:8099/"
   },
   {
     "id": "E02",
     "truth": "environment",
-    "test": "@BENCH-06",
+    "test": "@TC-BENCH-06",
     "about": "host tidak dikenal",
     "baseURL": "http://toolshop.invalid/"
   },
   {
     "id": "E03",
     "truth": "environment",
-    "test": "@BENCH-08",
+    "test": "@TC-BENCH-08",
     "about": "koneksi diputus di tengah jalan (socket hang up)",
     "proxy": { "method": "GET", "path": "/products/1", "hangup": true }
   }

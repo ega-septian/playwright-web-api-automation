@@ -7,14 +7,14 @@ API test automation with **Playwright**, **TypeScript**, and **Zod**, covering t
 
 ## Tech Stack
 
-| Tool | Purpose |
-|---|---|
-| [Playwright Test](https://playwright.dev) | Test runner and HTTP client (`request` fixture) |
-| TypeScript | Type safety for payloads and test code |
-| [Zod](https://zod.dev) | Runtime validation of response schemas (contract testing) |
-| [Faker](https://fakerjs.dev) | Unique test data (names, emails) |
-| dotenv | Loads secrets from `.env` |
-| GitHub Actions | Runs the suite on every push and pull request |
+| Tool                                      | Purpose                                                   |
+| ----------------------------------------- | --------------------------------------------------------- |
+| [Playwright Test](https://playwright.dev) | Test runner and HTTP client (`request` fixture)           |
+| TypeScript                                | Type safety for payloads and test code                    |
+| [Zod](https://zod.dev)                    | Runtime validation of response schemas (contract testing) |
+| [Faker](https://fakerjs.dev)              | Unique test data (names, emails)                          |
+| dotenv                                    | Loads secrets from `.env`                                 |
+| GitHub Actions                            | Runs the suite on every push and pull request             |
 
 ## Project Structure
 
@@ -89,22 +89,22 @@ Other conventions:
 
 ### GoRest: Users (`users.spec.ts`)
 
-| Test | Type | Expected |
-|---|---|---|
-| GET `/users` returns a valid user list | Positive | 200, list matches schema |
-| Create a new user | Positive | 201, response matches payload |
+| Test                                              | Type     | Expected                                |
+| ------------------------------------------------- | -------- | --------------------------------------- |
+| GET `/users` returns a valid user list            | Positive | 200, list matches schema                |
+| Create a new user                                 | Positive | 201, response matches payload           |
 | Create a user with an email that is already taken | Negative | 422, `email` / `has already been taken` |
-| Update user name and status to inactive | Positive | 200, response matches update payload |
-| Update a user that does not exist | Negative | 404, `Resource not found` |
+| Update user name and status to inactive           | Positive | 200, response matches update payload    |
+| Update a user that does not exist                 | Negative | 404, `Resource not found`               |
 
 ### Restful-Booker: Bookings (`booker.spec.ts`)
 
-| Test | Type | Expected |
-|---|---|---|
-| Create booking with deposit paid = `true` | Positive | 200, saved booking matches payload (verified with GET) |
+| Test                                       | Type     | Expected                                               |
+| ------------------------------------------ | -------- | ------------------------------------------------------ |
+| Create booking with deposit paid = `true`  | Positive | 200, saved booking matches payload (verified with GET) |
 | Create booking with deposit paid = `false` | Positive | 200, saved booking matches payload (verified with GET) |
-| Search booking by firstname | Positive | 200, created booking ID is in the results |
-| Search booking by lastname | Positive | 200, created booking ID is in the results |
+| Search booking by firstname                | Positive | 200, created booking ID is in the results              |
+| Search booking by lastname                 | Positive | 200, created booking ID is in the results              |
 
 ## Findings
 

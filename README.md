@@ -180,6 +180,18 @@ The remaining cases were answered "unclear" rather than guessed. One run per sce
 
 ## CI
 
-`.github/workflows/playwright.yml` runs the full suite on every push and pull request to `main`. The GoRest token is read from the repository secret `GOREST_TOKEN` (**Settings → Secrets and variables → Actions**).
+`.github/workflows/ci.yml` runs on every push and pull request to `main`, without starting any server:
 
-The Toolshop tests need the app running at `localhost:8091`, which the workflow does not start yet, so they fail in CI. Starting Practice Software Testing with Docker in the workflow, or skipping the `toolshop` project there, is still to do.
+| Step           | Command                        | Catches                                        |
+| -------------- | ------------------------------ | ---------------------------------------------- |
+| Type check     | `npx tsc -p .`                 | Wrong types, typos in field names, bad imports |
+| Lint           | `npm run lint`                 | Missing `await`, unused code, leftover `.only` |
+| Format         | `npm run format:check`         | Code not formatted with Prettier               |
+| All specs load | `npx playwright test --list`   | Specs that fail to load (syntax, imports)      |
+| Security audit | `npm audit --audit-level=high` | Vulnerable dependencies (warning only)         |
+
+The Playwright tests themselves are in `.github/workflows/playwright.yml` and run manually for now
+(**Actions → Playwright Tests → Run workflow**), because the Toolshop tests need the app at
+`localhost:8091`. The GoRest token is read from the repository secret `GOREST_TOKEN`
+(**Settings → Secrets and variables → Actions**). Next step: start Practice Software Testing with
+Docker in the workflow and run the tests on every pull request again.

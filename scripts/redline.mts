@@ -24,30 +24,14 @@
  *   REDLINE_KEEP_SANDBOX=1    jangan hapus folder salinan (untuk debug)
  */
 import { spawnSync } from "node:child_process";
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir, userInfo } from "node:os";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { userInfo } from "node:os";
 import path from "node:path";
+import { git, makeSandbox, resetSandbox } from "./sandbox.mts";
 
 const ROOT = process.cwd();
 const RESULTS_DIR = path.join(ROOT, "test-results");
 const LAST_RUN = path.join(RESULTS_DIR, "redline-last-run.json");
-const SKIP_COPY = new Set([
-  "node_modules",
-  ".git",
-  "test-results",
-  "playwright-report",
-  "blob-report",
-]);
 
 type Failure = {
   fingerprint: string;
@@ -213,7 +197,7 @@ async function verifyOne(f: Failure, force: boolean): Promise<number> {
     console.log(`  0. tebakan Redline: - (${guess.error})`);
   }
 
-  const sandbox = makeSandbox();
+  const sandbox = makeSandbox(ROOT);
   try {
     const run = (repeat: number) => runTest(sandbox, project, file, title, repeat);
 
@@ -396,40 +380,6 @@ const sourceNames: Record<string, string> = {
   experiment: "eksperimen",
 };
 const sourceName = (s: string) => sourceNames[s] ?? s;
-
-/** Salin project ke folder sementara. node_modules di-link, bukan disalin. */
-function makeSandbox(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "redline-"));
-  cpSync(ROOT, dir, {
-    recursive: true,
-    filter: (src) => !SKIP_COPY.has(path.relative(ROOT, src).split(path.sep)[0]),
-  });
-  symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"), "dir");
-  // git di salinan hanya untuk membuat diff patch dan mengembalikan file setelah percobaan gagal.
-  git(dir, ["init", "-q"]);
-  git(dir, ["add", "-A"]);
-  git(dir, [
-    "-c",
-    "user.name=redline",
-    "-c",
-    "user.email=redline@localhost",
-    "commit",
-    "-qm",
-    "base",
-    "--no-verify",
-  ]);
-  return dir;
-}
-
-function resetSandbox(dir: string) {
-  git(dir, ["checkout", "-q", "--", "."]);
-}
-
-function git(cwd: string, args: string[]): string {
-  const r = spawnSync("git", args, { cwd, encoding: "utf8" });
-  if (r.status !== 0) throw new Error(`git ${args[0]}: ${r.stderr.trim()}`);
-  return r.stdout;
-}
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

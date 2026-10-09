@@ -10,7 +10,8 @@
     "format:check": "prettier --check .",
     "redline": "node scripts/redline.mts",
     "redline:verify": "node scripts/redline.mts verify",
-    "redline:learn": "node scripts/redline.mts learn"
+    "redline:learn": "node scripts/redline.mts learn",
+    "redline:bench": "node scripts/redline-bench.mts"
   },
   "keywords": [],
   "author": "",

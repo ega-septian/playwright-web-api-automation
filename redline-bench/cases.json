@@ -1,0 +1,228 @@
+[
+  {
+    "id": "T01",
+    "truth": "test_bug",
+    "test": "@BENCH-01",
+    "about": "lupa await response.json()",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "const brands = BrandListSchema.parse(await response.json());",
+      "replace": "const brands = BrandListSchema.parse(response.json());"
+    }
+  },
+  {
+    "id": "T02",
+    "truth": "test_bug",
+    "test": "@BENCH-01",
+    "about": "schema objek dipakai untuk response array",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "const brands = BrandListSchema.parse(",
+      "replace": "const brands = BrandSchema.parse("
+    }
+  },
+  {
+    "id": "T03",
+    "truth": "test_bug",
+    "test": "@BENCH-02",
+    "about": "schema bersama salah tipe (id string)",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "z.object({ id: z.number(), name: z.string(), slug: z.string() })",
+      "replace": "z.object({ id: z.string(), name: z.string(), slug: z.string() })"
+    }
+  },
+  {
+    "id": "T04",
+    "truth": "test_bug",
+    "test": "@BENCH-03",
+    "about": "status yang diharapkan salah (200, padahal create = 201)",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "expect(response.status()).toBe(201);",
+      "replace": "expect(response.status()).toBe(200);"
+    }
+  },
+  {
+    "id": "T05",
+    "truth": "test_bug",
+    "test": "@BENCH-03",
+    "about": "matcher terlalu ketat (toEqual, padahal response punya id)",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "expect(brand).toMatchObject(payload);",
+      "replace": "expect(brand).toEqual(payload);"
+    }
+  },
+  {
+    "id": "T06",
+    "truth": "test_bug",
+    "test": "@BENCH-02",
+    "about": "salah ketik path endpoint (/brand/1)",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "request.get(\"/brands/1\")",
+      "replace": "request.get(\"/brand/1\")"
+    }
+  },
+  {
+    "id": "T07",
+    "truth": "test_bug",
+    "test": "@BENCH-05",
+    "about": "pesan error yang diharapkan salah",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "toBe(\"Requested item not found\")",
+      "replace": "toBe(\"Brand not found\")"
+    }
+  },
+  {
+    "id": "T08",
+    "truth": "test_bug",
+    "test": "@BENCH-03",
+    "about": "data test kurang field wajib (slug)",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "const payload = { name, slug: name.toLowerCase().replace(/\\s+/g, \"-\") };",
+      "replace": "const payload = { name };"
+    }
+  },
+  {
+    "id": "T09",
+    "truth": "test_bug",
+    "test": "@BENCH-04",
+    "about": "salah bentuk body error (body.errors.name)",
+    "edit": {
+      "file": "redline-bench/specs/brands.spec.ts",
+      "find": "expect(body.name).toContain(",
+      "replace": "expect(body.errors.name).toContain("
+    }
+  },
+  {
+    "id": "T10",
+    "truth": "test_bug",
+    "test": "@BENCH-08",
+    "about": "salah nama field bersarang (brand_slug)",
+    "edit": {
+      "file": "redline-bench/specs/catalog.spec.ts",
+      "find": "expect(product.brand.slug).toBeTruthy();",
+      "replace": "expect((product as Record<string, unknown>).brand_slug).toBeTruthy();"
+    }
+  },
+  {
+    "id": "T11",
+    "truth": "test_bug",
+    "test": "@BENCH-07",
+    "about": "mengira response dibungkus { data }",
+    "edit": {
+      "file": "redline-bench/specs/catalog.spec.ts",
+      "find": "Array.isArray(tree[0].sub_categories)",
+      "replace": "Array.isArray(tree.data[0].sub_categories)"
+    }
+  },
+  {
+    "id": "T12",
+    "truth": "test_bug",
+    "test": "@BENCH-06",
+    "about": "schema lupa nullable (parent_id null)",
+    "edit": {
+      "file": "redline-bench/specs/catalog.spec.ts",
+      "find": "parent_id: z.number().nullable(),",
+      "replace": "parent_id: z.number(),"
+    }
+  },
+  {
+    "id": "B01",
+    "truth": "backend_bug",
+    "test": "@BENCH-01",
+    "about": "GET /brands membalas 500",
+    "proxy": {
+      "method": "GET",
+      "path": "/brands",
+      "status": 500,
+      "body": { "message": "Server Error" }
+    }
+  },
+  {
+    "id": "B02",
+    "truth": "backend_bug",
+    "test": "@BENCH-01",
+    "about": "GET /brands kehilangan field slug",
+    "proxy": { "method": "GET", "path": "/brands", "drop": "slug" }
+  },
+  {
+    "id": "B03",
+    "truth": "backend_bug",
+    "test": "@BENCH-08",
+    "about": "GET /products/1 price jadi string",
+    "proxy": { "method": "GET", "path": "/products/1", "stringify": "price" }
+  },
+  {
+    "id": "B04",
+    "truth": "backend_bug",
+    "test": "@BENCH-03",
+    "about": "POST /brands membalas 200, bukan 201",
+    "proxy": { "method": "POST", "path": "/brands", "status": 200 }
+  },
+  {
+    "id": "B05",
+    "truth": "backend_bug",
+    "test": "@BENCH-05",
+    "about": "brand yang tidak ada membalas 200 {}",
+    "proxy": { "method": "GET", "path": "/brands/99999", "status": 200, "body": {} }
+  },
+  {
+    "id": "B06",
+    "truth": "backend_bug",
+    "test": "@BENCH-06",
+    "about": "GET /categories mengganti nama parent_id jadi parentId",
+    "proxy": { "method": "GET", "path": "/categories", "rename": ["parent_id", "parentId"] }
+  },
+  {
+    "id": "B07",
+    "truth": "backend_bug",
+    "test": "@BENCH-04",
+    "about": "validasi create brand membalas 500",
+    "proxy": {
+      "method": "POST",
+      "path": "/brands",
+      "status": 500,
+      "body": { "message": "Server Error" }
+    }
+  },
+  {
+    "id": "B08",
+    "truth": "backend_bug",
+    "test": "@BENCH-07",
+    "about": "GET /categories/tree kehilangan sub_categories",
+    "proxy": { "method": "GET", "path": "/categories/tree", "drop": "sub_categories" }
+  },
+  {
+    "id": "B09",
+    "truth": "backend_bug",
+    "test": "@BENCH-02",
+    "about": "GET /brands/1 mengembalikan brand lain (id 2), bentuk sama",
+    "proxy": { "method": "GET", "path": "/brands/1", "set": { "id": 2 } }
+  },
+  {
+    "id": "E01",
+    "truth": "environment",
+    "test": "@BENCH-01",
+    "about": "port salah: server tidak bisa dihubungi",
+    "baseURL": "http://localhost:8099/"
+  },
+  {
+    "id": "E02",
+    "truth": "environment",
+    "test": "@BENCH-06",
+    "about": "host tidak dikenal",
+    "baseURL": "http://toolshop.invalid/"
+  },
+  {
+    "id": "E03",
+    "truth": "environment",
+    "test": "@BENCH-08",
+    "about": "koneksi diputus di tengah jalan (socket hang up)",
+    "proxy": { "method": "GET", "path": "/products/1", "hangup": true }
+  }
+]

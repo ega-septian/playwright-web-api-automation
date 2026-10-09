@@ -181,9 +181,12 @@ export default class RedlineReporter implements Reporter {
         body: `{"playwright":${readFileSync(file, "utf8")},"test_hashes":${JSON.stringify(this.hashes)},"test_files":${JSON.stringify(this.files)}}`,
         signal: AbortSignal.timeout(15_000),
       });
-    } catch {
+    } catch (e) {
+      const timedOut = (e as Error).name === "TimeoutError";
       log(
-        `server tidak bisa dihubungi di ${baseURL}, hasil tidak dikirim. (Matikan dengan REDLINE=0)`,
+        timedOut
+          ? `server di ${baseURL} tidak membalas dalam 15 detik, hasil mungkin tidak tersimpan. Cek log server Redline.`
+          : `server tidak bisa dihubungi di ${baseURL}, hasil tidak dikirim. (Matikan dengan REDLINE=0)`,
       );
       return;
     }

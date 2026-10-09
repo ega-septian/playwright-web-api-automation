@@ -12,9 +12,11 @@
  * Skenario:
  *   history  semua spec dijalankan bersih dulu, jadi Redline punya pembanding (matriks perubahan)
  *   cold     test target belum pernah lulus (test baru), test lain punya riwayat
+ *   upgrade  test lulus di versi lama, lalu API dan/atau kontrak berubah: disengaja (test usang) atau regresi
  * Setiap skenario memakai server Redline sendiri dengan schema database terpisah (bench_<skenario>),
  * jadi data Redline yang biasa tidak tercampur.
  *
+ * --contract=on (default): server benchmark membaca kontrak OpenAPI Toolshop (TOOLSHOP_URL/docs).
  * --memory=on (default): setelah dinilai, kasus diberi label jawaban benar, sehingga kasus berikutnya
  * bisa memakai kasus mirip (butuh VOYAGE_API_KEY di .env Redline). --memory=off mematikan Voyage.
  *
@@ -49,6 +51,11 @@ type ProxyMutation = {
   set?: Record<string, unknown>;
   hangup?: boolean;
 };
+type ContractMutation = {
+  renameProperty?: { schema: string; from: string; to: string };
+  status?: { path: string; method: string; from: string; to: string };
+  propertyType?: { schema: string; property: string; type: string };
+};
 type Case = {
   id: string;
   truth: Category;
@@ -57,6 +64,7 @@ type Case = {
   edit?: { file: string; find: string; replace: string };
   proxy?: ProxyMutation;
   baseURL?: string;
+  contract?: ContractMutation; // skenario upgrade: kontrak (/docs) ikut diubah
 };
 type Analysis = {
   source: string;
@@ -84,6 +92,33 @@ type Result = {
 // ---------- proxy: meneruskan ke Toolshop, atau merusak response sesuai kasus ----------
 
 let mutation: ProxyMutation | null = null;
+let contractMutation: ContractMutation | null = null;
+
+type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** Ubah dokumen OpenAPI seperti perubahan kontrak antar versi aplikasi. */
+function mutateContract(doc: Json, m: ContractMutation): Json {
+  const schemas = doc.components?.schemas ?? {};
+  if (m.renameProperty) {
+    const props = schemas[m.renameProperty.schema]?.properties;
+    if (props?.[m.renameProperty.from]) {
+      props[m.renameProperty.to] = props[m.renameProperty.from];
+      delete props[m.renameProperty.from];
+    }
+  }
+  if (m.propertyType) {
+    const prop = schemas[m.propertyType.schema]?.properties?.[m.propertyType.property];
+    if (prop) prop.type = m.propertyType.type;
+  }
+  if (m.status) {
+    const responses = doc.paths?.[m.status.path]?.[m.status.method]?.responses;
+    if (responses?.[m.status.from]) {
+      responses[m.status.to] = responses[m.status.from];
+      delete responses[m.status.from];
+    }
+  }
+  return doc;
+}
 
 function transform(value: unknown, m: ProxyMutation): unknown {
   if (Array.isArray(value)) return value.map((v) => transform(v, m));
@@ -102,6 +137,7 @@ function startProxy(): Promise<http.Server> {
     const chunks: Buffer[] = [];
     for await (const c of req) chunks.push(c as Buffer);
     const url = new URL(req.url ?? "/", TOOLSHOP);
+    const isDocs = req.method === "GET" && url.pathname === "/docs";
     const m =
       mutation && mutation.method === req.method && mutation.path === url.pathname
         ? mutation
@@ -123,6 +159,9 @@ function startProxy(): Promise<http.Server> {
       });
       let status = upstream.status;
       let text = await upstream.text();
+      if (isDocs && contractMutation) {
+        text = JSON.stringify(mutateContract(JSON.parse(text), contractMutation));
+      }
       if (m) {
         if (m.status) status = m.status;
         if (m.body !== undefined) {
@@ -169,7 +208,12 @@ function buildServer(): string {
   return bin;
 }
 
-async function startServer(bin: string, scenario: string, memory: boolean): Promise<ChildProcess> {
+async function startServer(
+  bin: string,
+  scenario: string,
+  memory: boolean,
+  contract: boolean,
+): Promise<ChildProcess> {
   if (
     await fetch(`${SERVER_URL}/healthz`).then(
       () => true,
@@ -189,6 +233,8 @@ async function startServer(bin: string, scenario: string, memory: boolean): Prom
     RETENTION_DAYS: "0",
   };
   if (!memory) env.VOYAGE_API_KEY = ""; // ada tapi kosong: .env tidak menimpanya
+  // Kontrak dibaca lewat proxy: biasanya diteruskan apa adanya, kecuali kasus upgrade yang mengubahnya.
+  env.OPENAPI_SPECS = contract ? `bench=http://localhost:${PROXY_PORT}/docs` : "";
   const child = spawn(bin, [], { cwd: REDLINE_DIR, env, stdio: ["ignore", "pipe", "pipe"] });
   let log = "";
   child.stdout?.on("data", (d) => (log += d));
@@ -308,6 +354,7 @@ async function runCase(
     if (c.edit) applyEdit(sandbox, c.edit);
     if (scenario === "cold") makeTargetNew(sandbox, c.test, c.id);
     mutation = c.proxy ?? null;
+    contractMutation = c.contract ?? null;
     // Seluruh suite dijalankan (bukan hanya test target) supaya peta kode terisi seperti pemakaian nyata.
     const run = await runSpecs(sandbox, null, c.baseURL);
     const target = run.failures.find((f) => f.ids?.includes(c.test.slice(1)));
@@ -326,7 +373,9 @@ async function runCase(
         note: "kelompok sama dengan kasus sebelumnya (sudah dilabeli)",
       };
     }
-    if (memory) {
+    // Upgrade: error yang sama persis bisa punya penyebab berbeda (kontrak berubah atau tidak), jadi kasus
+    // tidak diberi label; label akan menimpa analisis kasus berikutnya yang kelompoknya sama.
+    if (memory && scenario !== "upgrade") {
       await api("PUT", `/api/groups/${fp}/label`, {
         label: c.truth,
         note: c.about,
@@ -347,6 +396,7 @@ async function runCase(
     return { ...base, note: (e as Error).message.slice(0, 200) };
   } finally {
     mutation = null;
+    contractMutation = null;
     resetSandbox(sandbox);
   }
 }
@@ -369,7 +419,7 @@ function summarize(results: Result[], scenario: string, memory: boolean): string
   const guessed = graded.filter((r) => r.predicted !== "unknown");
   const correct = graded.filter((r) => r.correct);
   const out = [
-    `## Skenario: ${scenario === "history" ? "dengan riwayat (pernah lulus)" : "cold start (test baru)"}` +
+    `## Skenario: ${{ history: "dengan riwayat (pernah lulus)", cold: "cold start (test baru)", upgrade: "upgrade versi (kontrak/API berubah)" }[scenario]}` +
       ` · ingatan ${memory ? "on" : "off"}`,
     "",
     `**Benar ${correct.length}/${graded.length} (${pct(correct.length, graded.length)})** · ` +
@@ -416,19 +466,30 @@ async function main() {
   const only = arg("only")?.split(",");
   const scenarios = arg("scenario") ? [arg("scenario")!] : ["history", "cold"];
   for (const s of scenarios) {
-    if (s !== "history" && s !== "cold")
-      throw new Error(`--scenario harus history atau cold, bukan "${s}"`);
+    if (s !== "history" && s !== "cold" && s !== "upgrade") {
+      throw new Error(`--scenario harus history, cold, atau upgrade, bukan "${s}"`);
+    }
   }
   const memoryArg = arg("memory") ?? "on";
   if (memoryArg !== "on" && memoryArg !== "off")
     throw new Error(`--memory harus on atau off, bukan "${memoryArg}"`);
   const memory = memoryArg === "on";
-  const cases = (
-    JSON.parse(readFileSync(path.join(ROOT, "redline-bench", "cases.json"), "utf8")) as Case[]
-  ).filter((c) => !only || only.includes(c.id));
+  const contractArg = arg("contract") ?? "on";
+  if (contractArg !== "on" && contractArg !== "off") {
+    throw new Error(`--contract harus on atau off, bukan "${contractArg}"`);
+  }
+  const contract = contractArg === "on";
+  const load = (file: string) =>
+    (JSON.parse(readFileSync(path.join(ROOT, "redline-bench", file), "utf8")) as Case[]).filter(
+      (c) => !only || only.includes(c.id),
+    );
+  // upgrade: test lulus di versi lama, lalu API dan/atau kontrak berubah (redline-bench/upgrade-cases.json).
+  const casesFor = (scenario: string) =>
+    load(scenario === "upgrade" ? "upgrade-cases.json" : "cases.json");
+  const total = scenarios.reduce((n, sc) => n + casesFor(sc).length, 0);
 
   console.log(
-    `Benchmark Redline: ${cases.length} kasus × ${scenarios.length} skenario, ingatan ${memory ? "on" : "off"}`,
+    `Benchmark Redline: ${total} kasus di ${scenarios.length} skenario, ingatan ${memory ? "on" : "off"}, kontrak ${contract ? "on" : "off"}`,
   );
   const bin = buildServer();
   const proxy = await startProxy();
@@ -437,9 +498,9 @@ async function main() {
   try {
     for (const scenario of scenarios) {
       console.log(`\n━━ skenario ${scenario}`);
-      const server = await startServer(bin, scenario, memory);
+      const server = await startServer(bin, scenario, memory, contract);
       try {
-        if (scenario === "history") {
+        if (scenario === "history" || scenario === "upgrade") {
           process.stdout.write("  baseline (semua spec bersih)… ");
           const base = await runSpecs(sandbox, null);
           if (base.failures.length > 0) {
@@ -449,7 +510,7 @@ async function main() {
           }
           console.log("lulus");
         }
-        for (const c of cases) {
+        for (const c of casesFor(scenario)) {
           process.stdout.write(`  ${c.id} ${c.about.padEnd(58)} `);
           const r = await runCase(sandbox, scenario, c, memory);
           results.push(r);
@@ -471,7 +532,7 @@ async function main() {
   const md = [
     "# Benchmark Redline",
     "",
-    `${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB · ${cases.length} bug tertanam · ingatan ${memory ? "on" : "off"}`,
+    `${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB · ${total} bug tertanam · ingatan ${memory ? "on" : "off"} · kontrak ${contract ? "on" : "off"}`,
     "",
     ...scenarios.map((s) => summarize(results, s, memory)),
   ].join("\n");

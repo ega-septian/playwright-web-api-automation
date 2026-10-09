@@ -127,12 +127,14 @@ Other conventions:
 | Search booking by firstname                | Positive | 200, created booking ID is in the results              |
 | Search booking by lastname                 | Positive | 200, created booking ID is in the results              |
 
-### Toolshop: Brands (`brand.spec.ts`, Sprint 1, in progress)
+### Toolshop: Brands (`brand.spec.ts`, Sprint 1)
 
-| ID         | Test           | Type     | Expected                      |
-| ---------- | -------------- | -------- | ----------------------------- |
-| TC-BRD-001 | Get all brands | Positive | 200, list matches schema      |
-| TC-BRD-002 | Create brand   | Positive | 201, response matches payload |
+| ID         | Test            | Type     | Expected                                                       |
+| ---------- | --------------- | -------- | -------------------------------------------------------------- |
+| TC-BRD-001 | Get all brands  | Positive | 200, list matches schema                                       |
+| TC-BRD-002 | Create brand    | Positive | 201, response matches payload                                  |
+| TC-BRD-003 | Get brand by id | Positive | 200, the created brand is returned (id, name, slug)            |
+| TC-BRD-004 | Update brand    | Positive | 200 `success: true`, a follow-up GET returns the new name/slug |
 
 ## Findings
 
@@ -171,7 +173,7 @@ What the reporter sends: test results, a hash of each test's code, the local fil
 | Scenario                                           | Correct | Wrong guesses |
 | -------------------------------------------------- | ------- | ------------- |
 | New test, no history (24 bugs)                     | 92%     | 0             |
-| Test that passed before (24 bugs)                  | 96%     | 0             |
+| Test that passed before (24 bugs)                  | 100%    | 0             |
 | App upgrade: outdated test vs regression (6 cases) | 6/6     | 0             |
 
 The remaining cases were answered "unclear" rather than guessed. One run per scenario with Claude Haiku 5.5; AI results can vary slightly between runs. Options: `--scenario=history|cold|upgrade`, `--only=T01,B02`, `--memory=off`, `--contract=off`.

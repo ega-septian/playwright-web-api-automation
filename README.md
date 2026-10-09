@@ -154,12 +154,13 @@ Observations from exploring Restful-Booker:
 
 The report includes a **curl command for every request of a failed test** (secrets redacted), so a failure can be reproduced outside Playwright.
 
-| Command                            | What it does                                                                                                                                                                                             |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REDLINE_AI=1 npx playwright test` | Also asks Redline for the cause of each incident (rules first, AI only when needed)                                                                                                                      |
-| `npm run redline:verify`           | Proves the cause: reruns the failed test as-is (flaky?), then lets the AI patch the test in a copy of the project and reruns it. A patch that makes the test pass is saved under `test-results/redline/` |
-| `npm run redline:learn`            | Turns proven cases into regex rules, backtested against past failures; `npm run redline -- approve <id>` activates one                                                                                   |
-| `npm run redline -- score`         | How often the rule and AI guesses turned out right, compared with proof                                                                                                                                  |
+| Command                                             | What it does                                                                                                                                                                                             |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REDLINE_AI=1 npx playwright test`                  | Also asks Redline for the cause of each incident (rules first, AI only when needed)                                                                                                                      |
+| `npm run redline:verify`                            | Proves the cause: reruns the failed test as-is (flaky?), then lets the AI patch the test in a copy of the project and reruns it. A patch that makes the test pass is saved under `test-results/redline/` |
+| `REDLINE_AI=1 REDLINE_VERIFY=1 npx playwright test` | Both in one go: analyse, then prove each new failure right after the run (local only, skipped in CI)                                                                                                     |
+| `npm run redline:learn`                             | Turns proven cases into regex rules, backtested against past failures; `npm run redline -- approve <id>` activates one                                                                                   |
+| `npm run redline -- score`                          | How often the rule and AI guesses turned out right, compared with proof                                                                                                                                  |
 
 What the reporter sends: test results, a hash of each test's code, the local files each test imports, the shape of API responses (field names and types, no values), and **the source code of failed tests** so the AI can read it. Secrets in code and messages are redacted by the server.
 

@@ -3,7 +3,6 @@ import {
   NotFoundErrorSchema,
   UserListResponseSchema,
   UserResponseSchema,
-  ValidationErrorSchema,
   ValidationListErrorSchema,
 } from "./schemas/user.schema";
 import { createUserPayload, updateUserpayload } from "./data/user.data";
@@ -56,9 +55,7 @@ test.describe("API User", () => {
     });
   });
 
-  test("Successfully update user name and status to inactive", async ({
-    request,
-  }) => {
+  test("Successfully update user name and status to inactive", async ({ request }) => {
     // Create a new user
     const payloadNewUser = createUserPayload();
     const reqNewUser = await request.post("public/v2/users", {

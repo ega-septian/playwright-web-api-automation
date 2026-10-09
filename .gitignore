@@ -2,6 +2,7 @@
 # Playwright
 node_modules/
 /test-results/
+redline-bench/test-results/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
@@ -9,3 +10,6 @@ node_modules/
 
 # Environment variables (berisi token, jangan di-commit)
 .env
+
+# macOS
+.DS_Store

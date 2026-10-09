@@ -7,7 +7,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["tests/**/*.ts", "playwright.config.ts"]
+  "include": [
+    "tests/**/*.ts",
+    "reporters/**/*.ts",
+    "fixtures/**/*.ts",
+    "scripts/**/*.mts",
+    "redline-bench/**/*.ts",
+    "playwright.config.ts"
+  ]
 }

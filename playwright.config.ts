@@ -14,14 +14,20 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: "html",
+  reporter: [
+    ["html"],
+    // Laporan mesin (JSON) untuk diolah tool lain, misalnya triage kegagalan.
+    ["json", { outputFile: "test-results/results.json" }],
+    // Kirim results.json ke Redline setelah test selesai. Harus setelah reporter "json".
+    ["./reporters/redline.ts"],
+  ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
     // baseURL: 'http://localhost:3000',
 
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: "on-first-retry",
+    /* Simpan trace hanya untuk test yang gagal (lokal maupun CI). See https://playwright.dev/docs/trace-viewer */
+    trace: "retain-on-failure",
   },
 
   /* Configure projects for major browsers */
@@ -43,6 +49,13 @@ export default defineConfig({
       testDir: "./tests/api/booker",
       use: {
         baseURL: "https://restful-booker.herokuapp.com",
+      },
+    },
+    {
+      name: "toolshop",
+      testDir: "./tests/api/toolshop",
+      use: {
+        baseURL: "http://localhost:8091/",
       },
     },
 

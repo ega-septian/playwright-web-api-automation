@@ -14,9 +14,7 @@ test.describe("Create Booking", () => {
   ];
 
   for (const booking of bookingCases) {
-    test(`Create booking using ${booking.title} successfully`, async ({
-      request,
-    }) => {
+    test(`Create booking using ${booking.title} successfully`, async ({ request }) => {
       const payload = createBookingPayload({
         depositpaid: booking.depositPaid,
       });
@@ -58,16 +56,15 @@ test.describe("Search Booking", () => {
     test(`User able to search booking using ${title}`, async ({ request }) => {
       const payload = createBookingPayload();
 
-      const bookingId =
-        await test.step("Precondition: create booking", async () => {
-          const response = await request.post("/booking", {
-            data: payload,
-          });
-
-          expect(response.status()).toBe(200);
-          const data = CreateBookingResponseSchema.parse(await response.json());
-          return data.bookingid;
+      const bookingId = await test.step("Precondition: create booking", async () => {
+        const response = await request.post("/booking", {
+          data: payload,
         });
+
+        expect(response.status()).toBe(200);
+        const data = CreateBookingResponseSchema.parse(await response.json());
+        return data.bookingid;
+      });
 
       await test.step(`Search booking using ${title}`, async () => {
         const response = await request.get("/booking", {

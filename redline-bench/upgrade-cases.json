@@ -1,0 +1,50 @@
+[
+  {
+    "id": "U01",
+    "truth": "test_bug",
+    "test": "@TC-BENCH-01",
+    "about": "disengaja: slug diganti handle (kontrak + API), test usang",
+    "proxy": { "method": "GET", "path": "/brands", "rename": ["slug", "handle"] },
+    "contract": { "renameProperty": { "schema": "BrandResponse", "from": "slug", "to": "handle" } }
+  },
+  {
+    "id": "U02",
+    "truth": "test_bug",
+    "test": "@TC-BENCH-03",
+    "about": "disengaja: create brand kini 200 (kontrak + API), test usang",
+    "proxy": { "method": "POST", "path": "/brands", "status": 200 },
+    "contract": { "status": { "path": "/brands", "method": "post", "from": "201", "to": "200" } }
+  },
+  {
+    "id": "U03",
+    "truth": "test_bug",
+    "test": "@TC-BENCH-08",
+    "about": "disengaja: price jadi string (kontrak + API), test usang",
+    "proxy": { "method": "GET", "path": "/products/1", "stringify": "price" },
+    "contract": {
+      "propertyType": { "schema": "ProductResponse", "property": "price", "type": "string" }
+    }
+  },
+  {
+    "id": "U04",
+    "truth": "backend_bug",
+    "test": "@TC-BENCH-01",
+    "about": "regresi: slug hilang, kontrak tetap",
+    "proxy": { "method": "GET", "path": "/brands", "drop": "slug" }
+  },
+  {
+    "id": "U05",
+    "truth": "backend_bug",
+    "test": "@TC-BENCH-03",
+    "about": "regresi: create brand 200, kontrak tetap 201",
+    "proxy": { "method": "POST", "path": "/brands", "status": 200 }
+  },
+  {
+    "id": "U06",
+    "truth": "backend_bug",
+    "test": "@TC-BENCH-01",
+    "about": "kontrak ganti slug jadi handle, tapi API menghapus slug tanpa handle",
+    "proxy": { "method": "GET", "path": "/brands", "drop": "slug" },
+    "contract": { "renameProperty": { "schema": "BrandResponse", "from": "slug", "to": "handle" } }
+  }
+]

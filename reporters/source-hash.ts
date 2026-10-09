@@ -51,6 +51,13 @@ export function sourceHash(file: string, line: number, column: number): string {
   return h.digest("hex").slice(0, 16);
 }
 
+/** File lokal yang dipakai test: file spec + file yang di-import langsung (path absolut, urut). */
+export function sourceFiles(file: string): string[] {
+  const src = read(file);
+  if (src === null) return [];
+  return [file, ...localImports(file, src)];
+}
+
 function offsetOf(src: string, line: number, column: number): number {
   let offset = 0;
   for (let i = 1; i < line; i++) {
@@ -108,7 +115,11 @@ function localImports(file: string, src: string): string[] {
 
 function resolve(dir: string, spec: string): string | null {
   const base = path.resolve(dir, spec);
-  for (const candidate of [base, ...[".ts", ".js", ".mts", ".json"].map((e) => base + e), path.join(base, "index.ts")]) {
+  for (const candidate of [
+    base,
+    ...[".ts", ".js", ".mts", ".json"].map((e) => base + e),
+    path.join(base, "index.ts"),
+  ]) {
     if (existsSync(candidate) && !candidate.endsWith("/")) {
       try {
         if (readFileSync(candidate)) return candidate;

@@ -1,5 +1,6 @@
 /**
- * Catat bentuk response API (field + tipe, tanpa nilai) untuk Redline.
+ * Catat bentuk response API (field + tipe, tanpa nilai) untuk Redline, dan lampirkan curl
+ * setiap request API ke report saat test gagal (header sensitif disamarkan).
  * Pakai: import { test, expect } from "../../../fixtures/redline";
  */
 import { test as base, expect, type APIResponse } from "@playwright/test";
@@ -13,19 +14,45 @@ const MAX_CALLS = 30;
 const MAX_DEPTH = 6;
 const MAX_KEYS = 100;
 const MAX_ITEMS = 20;
+const SENSITIVE_HEADERS = /^(authorization|cookie|set-cookie|x-api-key|api-key|x-auth-token)$/i;
+
+type RequestOptions = {
+  method?: string;
+  headers?: Record<string, string>;
+  params?: Record<string, string | number | boolean>;
+  data?: unknown;
+  form?: Record<string, string | number | boolean>;
+  multipart?: Record<string, unknown>;
+};
 
 export const test = base.extend({
   request: async ({ request }, use, testInfo) => {
     const calls: HttpCall[] = [];
+    const curls: string[] = [];
+    const { baseURL, extraHTTPHeaders } = testInfo.project.use;
     const recorded = new Proxy(request, {
       get(target, prop) {
         const value = Reflect.get(target, prop);
         if (typeof value !== "function") return value;
         if (typeof prop !== "string" || !METHODS.has(prop)) return value.bind(target);
-        return async (urlOrRequest: unknown, options?: { method?: string }) => {
-          const res: APIResponse = await value.call(target, urlOrRequest, options);
+        return async (urlOrRequest: unknown, options?: RequestOptions) => {
+          const method = methodOf(prop, urlOrRequest, options);
+          const headers = { ...extraHTTPHeaders, ...options?.headers };
+          let res: APIResponse;
+          try {
+            res = await value.call(target, urlOrRequest, options);
+          } catch (err) {
+            if (curls.length < MAX_CALLS) {
+              const url = requestURL(urlOrRequest, options, baseURL);
+              curls.push(
+                toCurl(method, url, headers, options, `tidak ada response: ${firstLine(err)}`),
+              );
+            }
+            throw err;
+          }
           if (calls.length < MAX_CALLS) {
-            calls.push(await describe(methodOf(prop, urlOrRequest, options), res));
+            calls.push(await describe(method, res));
+            curls.push(toCurl(method, res.url(), headers, options, String(res.status())));
           }
           return res;
         };
@@ -33,12 +60,79 @@ export const test = base.extend({
     });
     await use(recorded);
     if (calls.length > 0) {
-      await testInfo.attach("redline-http", { body: JSON.stringify(calls), contentType: "application/json" });
+      await testInfo.attach("redline-http", {
+        body: JSON.stringify(calls),
+        contentType: "application/json",
+      });
+    }
+    if (curls.length > 0 && testInfo.status !== testInfo.expectedStatus) {
+      await testInfo.attach("curl", { body: curls.join("\n\n"), contentType: "text/plain" });
     }
   },
 });
 
 export { expect };
+
+/** URL lengkap untuk request yang gagal sebelum dapat response (misalnya server mati). */
+function requestURL(
+  urlOrRequest: unknown,
+  options: RequestOptions | undefined,
+  baseURL?: string,
+): string {
+  const req = urlOrRequest as { url?: () => string };
+  const raw = typeof req?.url === "function" ? req.url() : String(urlOrRequest);
+  let url: URL;
+  try {
+    url = new URL(raw, baseURL);
+  } catch {
+    return raw;
+  }
+  for (const [k, v] of Object.entries(options?.params ?? {})) url.searchParams.set(k, String(v));
+  return url.toString();
+}
+
+/** curl yang bisa langsung dijalankan untuk mengulang request. Header sensitif disamarkan. */
+export function toCurl(
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  options: RequestOptions | undefined,
+  result: string,
+): string {
+  const lines = [
+    `# ${method} ${new URL(url).pathname} → ${result}`,
+    `curl -X ${method} ${quote(url)}`,
+  ];
+  const hasType = Object.keys(headers).some((h) => h.toLowerCase() === "content-type");
+  for (const [name, value] of Object.entries(headers)) {
+    lines.push(`  -H ${quote(`${name}: ${SENSITIVE_HEADERS.test(name) ? "<REDACTED>" : value}`)}`);
+  }
+  const data = options?.data;
+  if (data !== undefined && data !== null) {
+    if (typeof data === "string") {
+      lines.push(`  --data-raw ${quote(data)}`);
+    } else if (Buffer.isBuffer(data)) {
+      lines.push(`  --data-binary '<${data.length} byte>'`);
+    } else {
+      if (!hasType) lines.push(`  -H ${quote("Content-Type: application/json")}`);
+      lines.push(`  --data-raw ${quote(JSON.stringify(data))}`);
+    }
+  }
+  for (const [k, v] of Object.entries(options?.form ?? {}))
+    lines.push(`  --data-urlencode ${quote(`${k}=${v}`)}`);
+  for (const [k, v] of Object.entries(options?.multipart ?? {})) {
+    lines.push(`  -F ${quote(typeof v === "object" ? `${k}=@<file>` : `${k}=${v}`)}`);
+  }
+  return lines.join(" \\\n").replace(/^(# .*) \\\n/, "$1\n");
+}
+
+function quote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+function firstLine(err: unknown): string {
+  return String((err as Error)?.message ?? err).split("\n")[0];
+}
 
 function methodOf(prop: string, urlOrRequest: unknown, options?: { method?: string }): string {
   if (prop !== "fetch") return prop.toUpperCase();

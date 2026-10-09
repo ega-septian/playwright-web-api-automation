@@ -9,5 +9,11 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["tests/**/*.ts", "reporters/**/*.ts", "fixtures/**/*.ts", "playwright.config.ts"]
+  "include": [
+    "tests/**/*.ts",
+    "reporters/**/*.ts",
+    "fixtures/**/*.ts",
+    "scripts/**/*.mts",
+    "playwright.config.ts"
+  ]
 }

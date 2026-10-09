@@ -127,12 +127,14 @@ Other conventions:
 | Search booking by firstname                | Positive | 200, created booking ID is in the results              |
 | Search booking by lastname                 | Positive | 200, created booking ID is in the results              |
 
-### Toolshop: Brands (`brand.spec.ts`, Sprint 1, in progress)
+### Toolshop: Brands (`brand.spec.ts`, Sprint 1)
 
-| ID         | Test           | Type     | Expected                      |
-| ---------- | -------------- | -------- | ----------------------------- |
-| TC-BRD-001 | Get all brands | Positive | 200, list matches schema      |
-| TC-BRD-002 | Create brand   | Positive | 201, response matches payload |
+| ID         | Test            | Type     | Expected                                                       |
+| ---------- | --------------- | -------- | -------------------------------------------------------------- |
+| TC-BRD-001 | Get all brands  | Positive | 200, list matches schema                                       |
+| TC-BRD-002 | Create brand    | Positive | 201, response matches payload                                  |
+| TC-BRD-003 | Get brand by id | Positive | 200, the created brand is returned (id, name, slug)            |
+| TC-BRD-004 | Update brand    | Positive | 200 `success: true`, a follow-up GET returns the new name/slug |
 
 ## Findings
 
@@ -154,12 +156,13 @@ Observations from exploring Restful-Booker:
 
 The report includes a **curl command for every request of a failed test** (secrets redacted), so a failure can be reproduced outside Playwright.
 
-| Command                            | What it does                                                                                                                                                                                             |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REDLINE_AI=1 npx playwright test` | Also asks Redline for the cause of each incident (rules first, AI only when needed)                                                                                                                      |
-| `npm run redline:verify`           | Proves the cause: reruns the failed test as-is (flaky?), then lets the AI patch the test in a copy of the project and reruns it. A patch that makes the test pass is saved under `test-results/redline/` |
-| `npm run redline:learn`            | Turns proven cases into regex rules, backtested against past failures; `npm run redline -- approve <id>` activates one                                                                                   |
-| `npm run redline -- score`         | How often the rule and AI guesses turned out right, compared with proof                                                                                                                                  |
+| Command                                             | What it does                                                                                                                                                                                             |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REDLINE_AI=1 npx playwright test`                  | Also asks Redline for the cause of each incident (rules first, AI only when needed)                                                                                                                      |
+| `npm run redline:verify`                            | Proves the cause: reruns the failed test as-is (flaky?), then lets the AI patch the test in a copy of the project and reruns it. A patch that makes the test pass is saved under `test-results/redline/` |
+| `REDLINE_AI=1 REDLINE_VERIFY=1 npx playwright test` | Both in one go: analyse, then prove each new failure right after the run (local only, skipped in CI)                                                                                                     |
+| `npm run redline:learn`                             | Turns proven cases into regex rules, backtested against past failures; `npm run redline -- approve <id>` activates one                                                                                   |
+| `npm run redline -- score`                          | How often the rule and AI guesses turned out right, compared with proof                                                                                                                                  |
 
 What the reporter sends: test results, a hash of each test's code, the local files each test imports, the shape of API responses (field names and types, no values), and **the source code of failed tests** so the AI can read it. Secrets in code and messages are redacted by the server.
 
@@ -170,13 +173,25 @@ What the reporter sends: test results, a hash of each test's code, the local fil
 | Scenario                                           | Correct | Wrong guesses |
 | -------------------------------------------------- | ------- | ------------- |
 | New test, no history (24 bugs)                     | 92%     | 0             |
-| Test that passed before (24 bugs)                  | 96%     | 0             |
+| Test that passed before (24 bugs)                  | 100%    | 0             |
 | App upgrade: outdated test vs regression (6 cases) | 6/6     | 0             |
 
 The remaining cases were answered "unclear" rather than guessed. One run per scenario with Claude Haiku 5.5; AI results can vary slightly between runs. Options: `--scenario=history|cold|upgrade`, `--only=T01,B02`, `--memory=off`, `--contract=off`.
 
 ## CI
 
-`.github/workflows/playwright.yml` runs the full suite on every push and pull request to `main`. The GoRest token is read from the repository secret `GOREST_TOKEN` (**Settings → Secrets and variables → Actions**).
+`.github/workflows/ci.yml` runs on every push and pull request to `main`, without starting any server:
 
-The Toolshop tests need the app running at `localhost:8091`, which the workflow does not start yet, so they fail in CI. Starting Practice Software Testing with Docker in the workflow, or skipping the `toolshop` project there, is still to do.
+| Step           | Command                        | Catches                                        |
+| -------------- | ------------------------------ | ---------------------------------------------- |
+| Type check     | `npx tsc -p .`                 | Wrong types, typos in field names, bad imports |
+| Lint           | `npm run lint`                 | Missing `await`, unused code, leftover `.only` |
+| Format         | `npm run format:check`         | Code not formatted with Prettier               |
+| All specs load | `npx playwright test --list`   | Specs that fail to load (syntax, imports)      |
+| Security audit | `npm audit --audit-level=high` | Vulnerable dependencies (warning only)         |
+
+The Playwright tests themselves are in `.github/workflows/playwright.yml` and run manually for now
+(**Actions → Playwright Tests → Run workflow**), because the Toolshop tests need the app at
+`localhost:8091`. The GoRest token is read from the repository secret `GOREST_TOKEN`
+(**Settings → Secrets and variables → Actions**). Next step: start Practice Software Testing with
+Docker in the workflow and run the tests on every pull request again.

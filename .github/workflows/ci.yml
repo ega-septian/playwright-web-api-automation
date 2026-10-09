@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Cek kode tanpa menjalankan test: tidak butuh server (Toolshop, Redline) dan selesai dalam sekitar satu menit.
+# Test Playwright sendiri ada di playwright.yml dan dijalankan manual.
+jobs:
+  checks:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc -p .
+      - name: Lint
+        run: npm run lint
+      - name: Format
+        run: npm run format:check
+      - name: All specs load
+        # Memuat semua file spec tanpa menjalankannya: syntax error, import salah, atau judul ganda langsung ketahuan.
+        run: npx playwright test --list
+        env:
+          REDLINE: "0"
+      - name: Security audit
+        # Hanya peringatan: celah di dependency tidak membuat CI merah.
+        run: npm audit --audit-level=high
+        continue-on-error: true

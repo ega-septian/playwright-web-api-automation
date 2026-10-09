@@ -7,6 +7,8 @@
  *   REDLINE_APP_VERSION  versi backend, misalnya sprint5-with-bugs
  *   REDLINE_AI=1         analisis penyebab kegagalan
  *   REDLINE_AI_MAX       default 10
+ *   REDLINE_VERIFY=1     setelah run, langsung buktikan penyebab kegagalan dengan eksperimen
+ *                        (scripts/redline.mts verify; maksimal REDLINE_VERIFY_MAX, default 3). Diabaikan di CI.
  *   REDLINE_TRIGGERED_BY nama yang menjalankan, default user laptop atau ci:<GITHUB_ACTOR>
  *
  * ID test case diambil dari tag: test("...", { tag: "@TC-USR-001" }, ...)
@@ -21,7 +23,7 @@ import type {
   TestCase,
   TestResult,
 } from "@playwright/test/reporter";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { userInfo } from "node:os";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -251,8 +253,35 @@ export default class RedlineReporter implements Reporter {
     if (rows.length > 0) {
       const score = await scoreLine(baseURL);
       if (score) log(score);
-      log("buktikan penyebabnya dengan eksperimen: npm run redline:verify");
+      if (process.env.REDLINE_VERIFY === "1") this.verify();
+      else
+        log(
+          "buktikan penyebabnya dengan eksperimen: npm run redline:verify (atau jalankan dengan REDLINE_VERIFY=1)",
+        );
     }
+  }
+
+  /**
+   * REDLINE_VERIFY=1: buktikan penyebab kegagalan run ini dengan eksperimen (rerun, lalu patch dari AI di
+   * salinan project). Lambat dan menjalankan test lagi ke server, jadi hanya kalau diminta dan tidak di CI.
+   */
+  private verify() {
+    if (process.env.CI) {
+      log("REDLINE_VERIFY diabaikan di CI: eksperimen menjalankan ulang test dan kode buatan AI.");
+      return;
+    }
+    const root = this.config?.configFile ? path.dirname(this.config.configFile) : process.cwd();
+    const cli = path.join(root, "scripts", "redline.mts");
+    if (!existsSync(cli)) {
+      log(`REDLINE_VERIFY butuh ${path.relative(process.cwd(), cli)} (CLI Redline).`);
+      return;
+    }
+    log("membuktikan penyebab kegagalan dengan eksperimen…");
+    spawnSync(process.execPath, [cli, "verify"], {
+      cwd: root,
+      stdio: "inherit",
+      env: { ...process.env, REDLINE_VERIFY: "0" }, // run di dalam eksperimen tidak memverifikasi lagi
+    });
   }
 
   private reportFile(): string | undefined {

@@ -8,3 +8,7 @@ export function createBrandPayload(override: Partial<CreateBrandRequest> = {}): 
     ...override,
   };
 }
+
+export function updateBrandPayload(override: Partial<CreateBrandRequest> = {}): CreateBrandRequest {
+  return { name: faker.commerce.productName(), slug: faker.lorem.slug(), ...override };
+}

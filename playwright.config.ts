@@ -5,6 +5,10 @@ dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 export default defineConfig({
   testDir: "./tests",
+  /* Bukti per test (trace, error-context) dipisah dari laporan di test-results/. */
+  outputDir: "test-results/artifacts",
+  /* Setelah run, folder kosong (test yang lulus) dihapus: yang tersisa hanya test yang gagal. */
+  globalTeardown: "./global-teardown.ts",
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

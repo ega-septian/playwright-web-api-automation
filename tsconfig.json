@@ -16,6 +16,7 @@
     "fixtures/**/*.ts",
     "scripts/**/*.mts",
     "redline-bench/**/*.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "global-teardown.ts"
   ]
 }

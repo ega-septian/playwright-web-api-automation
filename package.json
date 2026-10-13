@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test:api": "playwright test --project=gorest --project=booker",
+    "test:api": "playwright test --project=toolshop",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

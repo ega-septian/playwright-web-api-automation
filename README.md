@@ -120,6 +120,7 @@ The report includes a **curl command for every request of a failed test** (secre
 | `REDLINE_AI=1 REDLINE_VERIFY=1 npx playwright test` | Both in one go: analyse, then prove each new failure right after the run (local only, skipped in CI)                                                                                                     |
 | `npm run redline:learn`                             | Turns proven cases into regex rules, backtested against past failures; `npm run redline -- approve <id>` activates one                                                                                   |
 | `npm run redline -- score`                          | How often the rule and AI guesses turned out right, compared with proof                                                                                                                                  |
+| `npm run redline -- impact schemas/brand.ts`        | Which tests depend on a file (through any chain of imports), with a `--grep` to run only them; also works with an endpoint: `impact GET /brands/1`                                                       |
 
 What the reporter sends: test results, a hash of each test's code, the local files each test imports, the shape of API responses (field names and types, no values), and **the source code of failed tests** so the AI can read it. Secrets in code and messages are redacted by the server.
 

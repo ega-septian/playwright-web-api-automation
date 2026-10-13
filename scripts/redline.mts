@@ -7,6 +7,8 @@
  *   npm run redline -- rules          daftar aturan
  *   npm run redline -- approve <id>   aktifkan aturan (reject <id> untuk menolak)
  *   npm run redline -- score          rapor: seberapa sering tebakan aturan dan AI terbukti benar
+ *   npm run redline -- impact <file>      test yang terdampak kalau file ini berubah (import bertingkat ikut)
+ *   npm run redline -- impact GET /brands/1   test yang memanggil endpoint ini
  *
  * Sebelum eksperimen, tebakan Redline dicatat dulu. Setelah terbukti, tebakan itu dinilai benar atau salah.
  * Kegagalan yang sudah terbukti dilewati; pakai `verify --force` untuk mengulang.
@@ -615,6 +617,33 @@ async function decide(id: string | undefined, status: "active" | "rejected") {
     console.log("Aturan aktif: kegagalan dengan pola ini sekarang diputuskan tanpa AI.");
 }
 
+/** Test yang terdampak kalau file atau endpoint berubah, dari graph Redline (run lulus terakhir tiap test). */
+async function impact(args: string[]) {
+  const q = args.join(" ").trim();
+  if (!q)
+    throw new Error(
+      "tulis file atau endpoint, misalnya: npm run redline -- impact schemas/brand.ts",
+    );
+  const isEndpoint = q.startsWith("/") || /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s/i.test(q);
+  const res = await api<{ tests: { test: string; test_case_id?: string; run_id: number }[] }>(
+    "GET",
+    `/api/impact?${new URLSearchParams({ [isEndpoint ? "endpoint" : "file"]: q })}`,
+  );
+  if (res.tests.length === 0) {
+    console.log(
+      `Tidak ada test yang ${isEndpoint ? "memanggil" : "memakai"} ${q} (menurut run yang sudah dikirim ke Redline).`,
+    );
+    return;
+  }
+  console.log(`${res.tests.length} test ${isEndpoint ? "memanggil" : "bergantung pada"} ${q}:\n`);
+  for (const t of res.tests) {
+    console.log(`  ${(t.test_case_id ?? "").padEnd(14)} ${t.test}`);
+  }
+  const ids = res.tests.map((t) => t.test_case_id).filter(Boolean);
+  if (ids.length > 0)
+    console.log(`\nJalankan hanya test ini: npx playwright test --grep "${ids.join("|")}"`);
+}
+
 // ---------- main ----------
 
 async function main() {
@@ -632,6 +661,8 @@ async function main() {
       return decide(args[0], "active");
     case "reject":
       return decide(args[0], "rejected");
+    case "impact":
+      return impact(args);
     default:
       console.log(
         readFileSync(new URL(import.meta.url), "utf8")

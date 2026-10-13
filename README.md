@@ -128,13 +128,14 @@ What the reporter sends: test results, a hash of each test's code, the local fil
 
 `npm run redline:bench` measures how accurate Redline is. Bugs with known answers are planted in a copy of the project (wrong test code, a proxy that breaks Toolshop responses, wrong base URL), and each one is analysed by a separate Redline server with its own Neo4j database (`bench-<scenario>`, emptied on start).
 
-| Scenario                                           | Correct | Wrong guesses |
-| -------------------------------------------------- | ------- | ------------- |
-| New test, no history (24 bugs)                     | 92%     | 0             |
-| Test that passed before (24 bugs)                  | 100%    | 0             |
-| App upgrade: outdated test vs regression (6 cases) | 6/6     | 0             |
+| Scenario                                                           | Correct             | Wrong guesses |
+| ------------------------------------------------------------------ | ------------------- | ------------- |
+| New test, no history (24 bugs)                                     | 92–96%              | 0             |
+| Test that passed before (24 bugs)                                  | 96–100%             | 0             |
+| App upgrade: outdated test vs regression (6 cases)                 | 6/6                 | 0             |
+| Shared helper/schema and shared endpoints, `kag` (6 cases, 3 runs) | 18/18, all by rules | 0             |
 
-The remaining cases were answered "unclear" rather than guessed. One run per scenario with Claude Haiku 5.5; AI results can vary slightly between runs. Options: `--scenario=history|cold|upgrade|kag` (`kag`: specs with nested imports and a shared endpoint, the baseline for knowledge-augmented analysis), `--only=T01,B02`, `--memory=off`, `--contract=off`. Server logs are saved to `test-results/redline-bench/server-<scenario>.log`.
+The remaining cases were answered "unclear" rather than guessed. Claude Haiku 5.5; the ranges are the spread between runs (AI results vary slightly). Redline v0.3.0 decides the `kag` cases with its knowledge graph instead of the AI. Options: `--scenario=history|cold|upgrade|kag` (`kag`: specs with nested imports and a shared endpoint, the baseline for knowledge-augmented analysis), `--only=T01,B02`, `--memory=off`, `--contract=off`. Server logs are saved to `test-results/redline-bench/server-<scenario>.log`.
 
 ## CI
 

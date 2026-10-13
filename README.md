@@ -133,7 +133,7 @@ What the reporter sends: test results, a hash of each test's code, the local fil
 | Test that passed before (24 bugs)                  | 100%    | 0             |
 | App upgrade: outdated test vs regression (6 cases) | 6/6     | 0             |
 
-The remaining cases were answered "unclear" rather than guessed. One run per scenario with Claude Haiku 5.5; AI results can vary slightly between runs. Options: `--scenario=history|cold|upgrade`, `--only=T01,B02`, `--memory=off`, `--contract=off`.
+The remaining cases were answered "unclear" rather than guessed. One run per scenario with Claude Haiku 5.5; AI results can vary slightly between runs. Options: `--scenario=history|cold|upgrade`, `--only=T01,B02`, `--memory=off`, `--contract=off`, `--store=neo4j` (Redline's Neo4j branch: a separate DozerDB database per scenario). Server logs are saved to `test-results/redline-bench/server-<scenario>.log`.
 
 ## CI
 

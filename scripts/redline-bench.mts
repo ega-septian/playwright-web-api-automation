@@ -13,15 +13,12 @@
  *   history  semua spec dijalankan bersih dulu, jadi Redline punya pembanding (matriks perubahan)
  *   cold     test target belum pernah lulus (test baru), test lain punya riwayat
  *   upgrade  test lulus di versi lama, lalu API dan/atau kontrak berubah: disengaja (test usang) atau regresi
- * Setiap skenario memakai server Redline sendiri dengan schema database terpisah (bench_<skenario>),
- * jadi data Redline yang biasa tidak tercampur.
+ * Setiap skenario memakai server Redline sendiri dengan database Neo4j terpisah (bench-<skenario>) yang
+ * dikosongkan dulu setiap kali mulai, jadi data Redline yang biasa tidak tercampur.
  *
  * --contract=on (default): server benchmark membaca kontrak OpenAPI Toolshop (TOOLSHOP_URL/docs).
  * --memory=on (default): setelah dinilai, kasus diberi label jawaban benar, sehingga kasus berikutnya
  * bisa memakai kasus mirip (butuh VOYAGE_API_KEY di .env Redline). --memory=off mematikan Voyage.
- *
- * --store=postgres (default) atau neo4j: tempat server benchmark menyimpan data. neo4j memakai database
- * terpisah per skenario (bench-<skenario>) di DozerDB lokal, yang dikosongkan dulu setiap kali mulai.
  *
  * Env: REDLINE_DIR (default ~/Developer/redline), TOOLSHOP_URL (default http://localhost:8091),
  *      BENCH_REDLINE_PORT (8788), BENCH_PROXY_PORT (8095),
@@ -225,7 +222,6 @@ async function startServer(
   scenario: string,
   memory: boolean,
   contract: boolean,
-  store: string,
 ): Promise<ChildProcess> {
   if (
     await fetch(`${SERVER_URL}/healthz`).then(
@@ -240,23 +236,13 @@ async function startServer(
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PORT: String(SERVER_PORT),
-    DATABASE_SCHEMA: `bench_${scenario}`,
-    DATABASE_SCHEMA_RESET: "1",
+    NEO4J_URI: process.env.BENCH_NEO4J_URI || "bolt://localhost:7688",
+    NEO4J_PASSWORD: process.env.BENCH_NEO4J_PASSWORD || "redline-local",
+    NEO4J_DATABASE: `bench-${scenario}`,
+    NEO4J_DATABASE_RESET: "1",
     STATUS_FROM: "all",
     RETENTION_DAYS: "0",
   };
-  if (store === "neo4j") {
-    // Database terpisah per skenario; Postgres (DATABASE_URL) tidak dibuka sama sekali.
-    Object.assign(env, {
-      STORE: "neo4j",
-      NEO4J_URI: process.env.BENCH_NEO4J_URI || "bolt://localhost:7688",
-      NEO4J_PASSWORD: process.env.BENCH_NEO4J_PASSWORD || "redline-local",
-      NEO4J_DATABASE: `bench-${scenario}`,
-      NEO4J_DATABASE_RESET: "1",
-    });
-  } else {
-    env.STORE = "postgres";
-  }
   if (!memory) env.VOYAGE_API_KEY = ""; // ada tapi kosong: .env tidak menimpanya
   // Kontrak dibaca lewat proxy: biasanya diteruskan apa adanya, kecuali kasus upgrade yang mengubahnya.
   env.OPENAPI_SPECS = contract ? `bench=http://localhost:${PROXY_PORT}/docs` : "";
@@ -512,10 +498,6 @@ async function main() {
     throw new Error(`--contract harus on atau off, bukan "${contractArg}"`);
   }
   const contract = contractArg === "on";
-  const store = arg("store") ?? "postgres";
-  if (store !== "postgres" && store !== "neo4j") {
-    throw new Error(`--store harus postgres atau neo4j, bukan "${store}"`);
-  }
   const load = (file: string) =>
     (JSON.parse(readFileSync(path.join(ROOT, "redline-bench", file), "utf8")) as Case[]).filter(
       (c) => !only || only.includes(c.id),
@@ -526,7 +508,7 @@ async function main() {
   const total = scenarios.reduce((n, sc) => n + casesFor(sc).length, 0);
 
   console.log(
-    `Benchmark Redline: ${total} kasus di ${scenarios.length} skenario, ingatan ${memory ? "on" : "off"}, kontrak ${contract ? "on" : "off"}, database ${store}`,
+    `Benchmark Redline: ${total} kasus di ${scenarios.length} skenario, ingatan ${memory ? "on" : "off"}, kontrak ${contract ? "on" : "off"}`,
   );
   const bin = buildServer();
   const proxy = await startProxy();
@@ -535,7 +517,7 @@ async function main() {
   try {
     for (const scenario of scenarios) {
       console.log(`\n━━ skenario ${scenario}`);
-      const server = await startServer(bin, scenario, memory, contract, store);
+      const server = await startServer(bin, scenario, memory, contract);
       try {
         if (scenario === "history" || scenario === "upgrade") {
           process.stdout.write("  baseline (semua spec bersih)… ");
@@ -569,7 +551,7 @@ async function main() {
   const md = [
     "# Benchmark Redline",
     "",
-    `${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB · ${total} bug tertanam · ingatan ${memory ? "on" : "off"} · kontrak ${contract ? "on" : "off"} · database ${store}`,
+    `${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB · ${total} bug tertanam · ingatan ${memory ? "on" : "off"} · kontrak ${contract ? "on" : "off"}`,
     "",
     ...scenarios.map((s) => summarize(results, s, memory)),
   ].join("\n");

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "K01",
+    "truth": "test_bug",
+    "test": "@TC-KAG-02",
+    "about": "schema bersama (2 import di bawah spec) salah tipe: id string",
+    "edit": {
+      "file": "redline-bench/kag-specs/schemas/brand.ts",
+      "find": "id: z.number(), name",
+      "replace": "id: z.string(), name"
+    }
+  },
+  {
+    "id": "K02",
+    "truth": "test_bug",
+    "test": "@TC-KAG-02",
+    "about": "helper bersama salah ketik path (/brand/:id)",
+    "edit": {
+      "file": "redline-bench/kag-specs/helpers/brands.ts",
+      "find": "request.get(`/brands/${id}`)",
+      "replace": "request.get(`/brand/${id}`)"
+    }
+  },
+  {
+    "id": "K03",
+    "truth": "test_bug",
+    "test": "@TC-KAG-02",
+    "about": "schema bersama mewajibkan field yang tidak ada di API (logo)",
+    "edit": {
+      "file": "redline-bench/kag-specs/schemas/brand.ts",
+      "find": "slug: z.string() })",
+      "replace": "slug: z.string(), logo: z.string() })"
+    }
+  },
+  {
+    "id": "K04",
+    "truth": "backend_bug",
+    "test": "@TC-KAG-02",
+    "about": "helper diubah (tidak berhubungan) bersamaan dengan /brands/1 kehilangan slug",
+    "edits": [
+      {
+        "file": "redline-bench/kag-specs/helpers/brands.ts",
+        "find": "// Helper bersama: dipakai brands.spec.ts dan products.spec.ts.",
+        "replace": "export const BRANDS_PATH = \"/brands\";\n\n// Helper bersama: dipakai brands.spec.ts dan products.spec.ts."
+      }
+    ],
+    "proxy": { "method": "GET", "path": "/brands/1", "drop": "slug" }
+  },
+  {
+    "id": "K05",
+    "truth": "backend_bug",
+    "test": "@TC-KAG-03",
+    "about": "/brands/1 mengembalikan brand lain; gagal di beberapa spec, kode tidak berubah",
+    "proxy": {
+      "method": "GET",
+      "path": "/brands/1",
+      "set": { "id": 2, "name": "brand name 2", "slug": "brand-name-2" }
+    }
+  },
+  {
+    "id": "K06",
+    "truth": "backend_bug",
+    "test": "@TC-KAG-02",
+    "about": "schema bersama diubah (tidak berhubungan) bersamaan dengan /brands/1 kehilangan name",
+    "edits": [
+      {
+        "file": "redline-bench/kag-specs/schemas/brand.ts",
+        "find": "export type Brand",
+        "replace": "export const BrandNameSchema = z.string().min(1);\nexport type Brand"
+      }
+    ],
+    "proxy": { "method": "GET", "path": "/brands/1", "drop": "name" }
+  }
+]

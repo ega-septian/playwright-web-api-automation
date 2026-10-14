@@ -13,18 +13,30 @@
  *   history  semua spec dijalankan bersih dulu, jadi Redline punya pembanding (matriks perubahan)
  *   cold     test target belum pernah lulus (test baru), test lain punya riwayat
  *   upgrade  test lulus di versi lama, lalu API dan/atau kontrak berubah: disengaja (test usang) atau regresi
- * Setiap skenario memakai server Redline sendiri dengan schema database terpisah (bench_<skenario>),
- * jadi data Redline yang biasa tidak tercampur.
+ *   kag      spec dengan import bertingkat (spec -> helper -> schema) dan beberapa spec yang memakai endpoint
+ *            yang sama (redline-bench/kag-specs, kag-cases.json). Patokan untuk Knowledge-Augmented Generation:
+ *            kasus yang butuh menelusuri hubungan file dan endpoint, bukan hanya membaca satu test.
+ * Setiap skenario memakai server Redline sendiri dengan database Neo4j terpisah (bench-<skenario>) yang
+ * dikosongkan dulu setiap kali mulai, jadi data Redline yang biasa tidak tercampur.
  *
  * --contract=on (default): server benchmark membaca kontrak OpenAPI Toolshop (TOOLSHOP_URL/docs).
  * --memory=on (default): setelah dinilai, kasus diberi label jawaban benar, sehingga kasus berikutnya
  * bisa memakai kasus mirip (butuh VOYAGE_API_KEY di .env Redline). --memory=off mematikan Voyage.
  *
  * Env: REDLINE_DIR (default ~/Developer/redline), TOOLSHOP_URL (default http://localhost:8091),
- *      BENCH_REDLINE_PORT (8788), BENCH_PROXY_PORT (8095)
+ *      BENCH_REDLINE_PORT (8788), BENCH_PROXY_PORT (8095),
+ *      BENCH_NEO4J_URI (bolt://localhost:7688), BENCH_NEO4J_PASSWORD (redline-local)
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import http from "node:http";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -36,7 +48,11 @@ const TOOLSHOP = (process.env.TOOLSHOP_URL || "http://localhost:8091").replace(/
 const SERVER_PORT = Number(process.env.BENCH_REDLINE_PORT || 8788);
 const PROXY_PORT = Number(process.env.BENCH_PROXY_PORT || 8095);
 const SERVER_URL = `http://localhost:${SERVER_PORT}`;
-const CONFIG = "redline-bench/playwright.bench.config.ts";
+const CONFIGS: Record<string, string> = {
+  kag: "redline-bench/playwright.kag.config.ts",
+};
+const DEFAULT_CONFIG = "redline-bench/playwright.bench.config.ts";
+let config = DEFAULT_CONFIG; // diganti per skenario
 const OUT_DIR = path.join(ROOT, "test-results", "redline-bench");
 
 type Category = "test_bug" | "backend_bug" | "environment";
@@ -56,12 +72,14 @@ type ContractMutation = {
   status?: { path: string; method: string; from: string; to: string };
   propertyType?: { schema: string; property: string; type: string };
 };
+type Edit = { file: string; find: string; replace: string };
 type Case = {
   id: string;
   truth: Category;
   test: string;
   about: string;
-  edit?: { file: string; find: string; replace: string };
+  edit?: Edit;
+  edits?: Edit[]; // beberapa perubahan sekaligus (misalnya perubahan kode yang tidak berhubungan + bug backend)
   proxy?: ProxyMutation;
   baseURL?: string;
   contract?: ContractMutation; // skenario upgrade: kontrak (/docs) ikut diubah
@@ -227,8 +245,10 @@ async function startServer(
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PORT: String(SERVER_PORT),
-    DATABASE_SCHEMA: `bench_${scenario}`,
-    DATABASE_SCHEMA_RESET: "1",
+    NEO4J_URI: process.env.BENCH_NEO4J_URI || "bolt://localhost:7688",
+    NEO4J_PASSWORD: process.env.BENCH_NEO4J_PASSWORD || "redline-local",
+    NEO4J_DATABASE: `bench-${scenario}`,
+    NEO4J_DATABASE_RESET: "1",
     STATUS_FROM: "all",
     RETENTION_DAYS: "0",
   };
@@ -236,9 +256,17 @@ async function startServer(
   // Kontrak dibaca lewat proxy: biasanya diteruskan apa adanya, kecuali kasus upgrade yang mengubahnya.
   env.OPENAPI_SPECS = contract ? `bench=http://localhost:${PROXY_PORT}/docs` : "";
   const child = spawn(bin, [], { cwd: REDLINE_DIR, env, stdio: ["ignore", "pipe", "pipe"] });
+  // Log server disimpan ke file, supaya penyebab "analisis gagal" bisa dicek setelah benchmark selesai.
+  mkdirSync(OUT_DIR, { recursive: true });
+  const logFile = path.join(OUT_DIR, `server-${scenario}.log`);
+  writeFileSync(logFile, "");
   let log = "";
-  child.stdout?.on("data", (d) => (log += d));
-  child.stderr?.on("data", (d) => (log += d));
+  const keep = (d: Buffer) => {
+    log += d;
+    appendFileSync(logFile, d);
+  };
+  child.stdout?.on("data", keep);
+  child.stderr?.on("data", keep);
   for (let i = 0; i < 60; i++) {
     try {
       if ((await fetch(`${SERVER_URL}/healthz`)).ok) return child;
@@ -272,7 +300,7 @@ type LastRun = { failures: { fingerprint: string; test: string; ids?: string[] }
 async function runSpecs(sandbox: string, grep: string | null, baseURL?: string): Promise<LastRun> {
   const results = path.join(sandbox, "redline-bench", "test-results");
   rmSync(results, { recursive: true, force: true });
-  const args = ["playwright", "test", "-c", CONFIG];
+  const args = ["playwright", "test", "-c", config];
   if (grep) args.push(`--grep=${grep}`);
   const child = spawn("npx", args, {
     cwd: sandbox,
@@ -301,7 +329,7 @@ async function runSpecs(sandbox: string, grep: string | null, baseURL?: string):
   return JSON.parse(readFileSync(file, "utf8"));
 }
 
-function applyEdit(sandbox: string, edit: NonNullable<Case["edit"]>) {
+function applyEdit(sandbox: string, edit: Edit) {
   const file = path.join(sandbox, edit.file);
   const src = readFileSync(file, "utf8");
   const hits = src.split(edit.find).length - 1;
@@ -351,7 +379,7 @@ async function runCase(
     cost: 0,
   };
   try {
-    if (c.edit) applyEdit(sandbox, c.edit);
+    for (const e of [...(c.edit ? [c.edit] : []), ...(c.edits ?? [])]) applyEdit(sandbox, e);
     if (scenario === "cold") makeTargetNew(sandbox, c.test, c.id);
     mutation = c.proxy ?? null;
     contractMutation = c.contract ?? null;
@@ -419,7 +447,7 @@ function summarize(results: Result[], scenario: string, memory: boolean): string
   const guessed = graded.filter((r) => r.predicted !== "unknown");
   const correct = graded.filter((r) => r.correct);
   const out = [
-    `## Skenario: ${{ history: "dengan riwayat (pernah lulus)", cold: "cold start (test baru)", upgrade: "upgrade versi (kontrak/API berubah)" }[scenario]}` +
+    `## Skenario: ${{ history: "dengan riwayat (pernah lulus)", cold: "cold start (test baru)", upgrade: "upgrade versi (kontrak/API berubah)", kag: "KAG (import bertingkat, endpoint bersama)" }[scenario]}` +
       ` · ingatan ${memory ? "on" : "off"}`,
     "",
     `**Benar ${correct.length}/${graded.length} (${pct(correct.length, graded.length)})** · ` +
@@ -466,8 +494,8 @@ async function main() {
   const only = arg("only")?.split(",");
   const scenarios = arg("scenario") ? [arg("scenario")!] : ["history", "cold"];
   for (const s of scenarios) {
-    if (s !== "history" && s !== "cold" && s !== "upgrade") {
-      throw new Error(`--scenario harus history, cold, atau upgrade, bukan "${s}"`);
+    if (s !== "history" && s !== "cold" && s !== "upgrade" && s !== "kag") {
+      throw new Error(`--scenario harus history, cold, upgrade, atau kag, bukan "${s}"`);
     }
   }
   const memoryArg = arg("memory") ?? "on";
@@ -484,8 +512,9 @@ async function main() {
       (c) => !only || only.includes(c.id),
     );
   // upgrade: test lulus di versi lama, lalu API dan/atau kontrak berubah (redline-bench/upgrade-cases.json).
+  // kag: spec dengan import bertingkat (redline-bench/kag-cases.json).
   const casesFor = (scenario: string) =>
-    load(scenario === "upgrade" ? "upgrade-cases.json" : "cases.json");
+    load({ upgrade: "upgrade-cases.json", kag: "kag-cases.json" }[scenario] ?? "cases.json");
   const total = scenarios.reduce((n, sc) => n + casesFor(sc).length, 0);
 
   console.log(
@@ -500,7 +529,8 @@ async function main() {
       console.log(`\n━━ skenario ${scenario}`);
       const server = await startServer(bin, scenario, memory, contract);
       try {
-        if (scenario === "history" || scenario === "upgrade") {
+        config = CONFIGS[scenario] ?? DEFAULT_CONFIG;
+        if (scenario !== "cold") {
           process.stdout.write("  baseline (semua spec bersih)… ");
           const base = await runSpecs(sandbox, null);
           if (base.failures.length > 0) {

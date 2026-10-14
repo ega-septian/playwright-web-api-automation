@@ -58,6 +58,35 @@ export function sourceFiles(file: string): string[] {
   return [file, ...localImports(file, src)];
 }
 
+/** Hash isi satu file (tanpa komentar dan spasi), 16 karakter. "" kalau file tidak terbaca. */
+export function fileHash(file: string): string {
+  const src = read(file);
+  return src === null
+    ? ""
+    : createHash("sha256").update(normalizeCode(src)).digest("hex").slice(0, 16);
+}
+
+export type FileNode = { hash: string; imports: string[] };
+
+/**
+ * Graph import lokal: semua file yang bisa dicapai dari files (import bertingkat, path absolut) beserta hash
+ * isinya dan import langsungnya. Dipakai Redline untuk menelusuri file yang benar-benar dipakai test (KAG).
+ */
+export function importGraph(files: Iterable<string>, max = 1000): Map<string, FileNode> {
+  const graph = new Map<string, FileNode>();
+  const queue = [...files];
+  while (queue.length > 0 && graph.size < max) {
+    const file = queue.shift()!;
+    if (graph.has(file)) continue;
+    const src = read(file);
+    if (src === null) continue;
+    const imports = localImports(file, src);
+    graph.set(file, { hash: fileHash(file), imports });
+    queue.push(...imports);
+  }
+  return graph;
+}
+
 function offsetOf(src: string, line: number, column: number): number {
   let offset = 0;
   for (let i = 1; i < line; i++) {

@@ -27,7 +27,7 @@ import { execSync, spawnSync } from "node:child_process";
 import { userInfo } from "node:os";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { sourceFiles, sourceHash } from "./source-hash";
+import { importGraph, sourceFiles, sourceHash } from "./source-hash";
 
 type Options = {
   /** Default: outputFile reporter "json". */
@@ -100,6 +100,8 @@ export default class RedlineReporter implements Reporter {
   private files: Record<string, string[]> = {};
   /** Isi file kode test yang gagal (path relatif -> isi), supaya AI bisa membaca kodenya. */
   private sources: Record<string, string> = {};
+  /** File spec yang dijalankan (path absolut), titik awal graph import. */
+  private specFiles = new Set<string>();
   /** "project › file › judul" (format server) -> ID dari tag @TC-... */
   private ids: Record<string, string> = {};
   /** "project › file › judul" -> curl dari fixture Redline, hanya untuk test yang gagal. */
@@ -126,6 +128,7 @@ export default class RedlineReporter implements Reporter {
       .split(path.sep)
       .join("/");
     const key = `${relFile}:${line}`;
+    this.specFiles.add(file);
     const testKey = `${test.parent.project()?.name ?? ""} › ${relFile} › ${test.titlePath().slice(3).join(" › ")}`;
     const id = test.tags.find((t) => /^@TC-/i.test(t));
     if (id) this.ids[testKey] = id.slice(1);
@@ -140,6 +143,17 @@ export default class RedlineReporter implements Reporter {
       );
     }
     if (result.status !== "passed" && result.status !== "skipped") this.addSources(file);
+  }
+
+  /** Graph import semua spec yang dijalankan, dengan path relatif seperti test_files. */
+  private fileGraph(): Record<string, { hash: string; imports: string[] }> {
+    const root = this.config?.configFile ? path.dirname(this.config.configFile) : process.cwd();
+    const rel = (f: string) => path.relative(root, f).split(path.sep).join("/");
+    const out: Record<string, { hash: string; imports: string[] }> = {};
+    for (const [file, node] of importGraph(this.specFiles)) {
+      out[rel(file)] = { hash: node.hash, imports: node.imports.map(rel) };
+    }
+    return out;
   }
 
   /** Simpan isi file spec dan file lokal yang di-import (maksimal 50 KB per file). Disamarkan di server. */
@@ -198,7 +212,7 @@ export default class RedlineReporter implements Reporter {
       res = await fetch(`${baseURL}/api/runs?${params}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: `{"playwright":${readFileSync(file, "utf8")},"test_hashes":${JSON.stringify(this.hashes)},"test_files":${JSON.stringify(this.files)},"sources":${JSON.stringify(this.sources)}}`,
+        body: `{"playwright":${readFileSync(file, "utf8")},"test_hashes":${JSON.stringify(this.hashes)},"test_files":${JSON.stringify(this.files)},"sources":${JSON.stringify(this.sources)},"files":${JSON.stringify(this.fileGraph())}}`,
         signal: AbortSignal.timeout(15_000),
       });
     } catch (e) {

@@ -1,167 +1,125 @@
 # Playwright API Automation
 
-API test automation with **Playwright**, **TypeScript**, and **Zod** for
-[Practice Software Testing](https://testsmith-io.github.io/practice-software-testing/) ("Toolshop"):
-an e-commerce API that grows sprint by sprint, run locally with Docker. Tests follow the sprints,
-starting with Sprint 1 (brands, categories, products, images).
+[![CI](https://github.com/ega-septian/playwright-web-api-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/ega-septian/playwright-web-api-automation/actions/workflows/ci.yml)
 
-Failed tests are triaged by [Redline](https://github.com/ega-septian/redline), a failure-analysis server I built alongside this suite: it groups failures by cause, explains them with rules and AI, and can prove a cause by rerunning the test with a patch. See [Failure triage with Redline](#failure-triage-with-redline).
+API test automation for the Toolshop e-commerce API ([Practice Software Testing](https://testsmith-io.github.io/practice-software-testing/)), built with **Playwright**, **TypeScript** and **Zod**. Failed tests are triaged automatically by [Redline](https://github.com/ega-septian/redline), a failure-analysis server I built alongside this suite.
 
-## Tech Stack
+- **Three-layer assertions** on every response: status code, Zod contract, data
+- **Positive, negative and boundary tests**, each with a `@TC-` test case ID
+- **Every failure explained** by Redline: backend bug, test bug, environment or flaky
+- **CI on every pull request**: types, lint, format and test case IDs
 
-| Tool                                      | Purpose                                                   |
-| ----------------------------------------- | --------------------------------------------------------- |
-| [Playwright Test](https://playwright.dev) | Test runner and HTTP client (`request` fixture)           |
-| TypeScript                                | Type safety for payloads and test code                    |
-| [Zod](https://zod.dev)                    | Runtime validation of response schemas (contract testing) |
-| [Faker](https://fakerjs.dev)              | Unique test data (names, slugs)                           |
-| dotenv                                    | Loads local settings from `.env` (optional)               |
-| ESLint + Prettier                         | Linting (incl. `eslint-plugin-playwright`) and formatting |
-| GitHub Actions                            | Runs the suite on every push and pull request             |
+## Quick start
 
-## Project Structure
-
-```
-tests/api/toolshop/
-├── schemas/brand.schema.ts          # Zod schemas: the expected shape of each response
-├── types/brand.types.ts             # TypeScript types for request payloads
-├── data/brand.data.ts               # Test data factories with default values + overrides
-├── helper/                          # Small helpers shared by specs
-├── brand.spec.ts
-└── register.user.spec.ts            # skipped until the sprint that adds users
-fixtures/redline.ts                  # request fixture: records response shapes and a curl per request
-reporters/redline.ts                 # sends results to Redline and prints the triage summary
-scripts/redline.mts                  # Redline CLI: verify, learn, rules, score
-scripts/redline-bench.mts            # benchmark with planted bugs
-redline-bench/                       # benchmark specs and bug catalogue
-```
-
-`playwright.config.ts` has one project, `toolshop`, with its `testDir` and `baseURL`. Each Toolshop
-feature (brands, categories, products, …) gets its own spec, schema, type and data files.
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 22.6 or newer (the scripts in `scripts/` are TypeScript run directly by Node)
-- [Practice Software Testing](https://github.com/testsmith-io/practice-software-testing) running locally with Docker, API at `http://localhost:8091`
-- Optional: a [Redline](https://github.com/ega-septian/redline) server at `http://localhost:8787`. Without it, tests run normally and the reporter prints a warning.
-
-### Install
+Requires Node.js 22.6+ and [Practice Software Testing](https://github.com/testsmith-io/practice-software-testing) running locally with Docker (API at `http://localhost:8091`).
 
 ```bash
 npm install
+npm run test:api                         # all Toolshop tests
+npx playwright test --grep @TC-BRD-003   # one test case by its ID
+npx playwright test --grep "POST /brands" # one endpoint
+npx playwright show-report               # HTML report
 ```
 
-The tests only call the API, so no browser needs to be installed. A `.env` file in the project
-root is optional (for example `REDLINE_URL`); it is listed in `.gitignore` and must never be committed.
-
-### Run
+Before pushing:
 
 ```bash
-npm run test:api                               # all Toolshop tests
-npx playwright test tests/api/toolshop/brand.spec.ts
-npx playwright test --grep @TC-BRD-003         # one test case by its ID
-npx playwright show-report                     # open the HTML report
+npm run format && npm run lint && npx tsc -p . && npm run check:ids
 ```
 
-### Lint and format
+## Test coverage
 
-```bash
-npm run lint           # ESLint, incl. Playwright rules such as missing await on expect/test.step
-npm run format         # Prettier, rewrites files
-npm run format:check   # Prettier, check only
-npm run check:ids      # every test has exactly one unique @TC- tag (see Test conventions)
+Sprint 1 · Brands (`brand.spec.ts`, 11 tests)
+
+| Endpoint              | Covered                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `POST /brands`        | Create; missing name or slug (422); duplicate slug (409); name length 120/121; empty body |
+| `GET /brands`         | List matches schema                                                                       |
+| `GET /brands/{id}`    | Get by id                                                                                 |
+| `PUT /brands/{id}`    | Update, verified with a follow-up read                                                    |
+| `DELETE /brands/{id}` | Delete, verified by a 404 afterwards                                                      |
+
+Full list with IDs: `npx playwright test --list`. Next: categories, products and images.
+
+## How tests are written
+
+```ts
+test("Create brand fails when slug already exists", { tag: "@TC-BRD-008" }, async ({ request }) => {
+  const payload = createBrandPayload(); // valid defaults, override only what matters
+  // ...create it once, then again:
+  expect(response.status()).toBe(409); // 1. status code
+  const body = BrandErrorSchema.parse(await response.json()); // 2. contract (Zod)
+  expect(body.slug).toContainEqual("A brand already exists with this slug."); // 3. data
+});
 ```
 
-## Test Approach
+- **Tests create their own data**, so they don't depend on seed data or on each other.
+- **Writes are verified with a follow-up read**, not just by the response.
+- **One `describe` per endpoint**, so reports and `--grep` follow the API.
 
-Every test validates the response in three layers:
+## Test case IDs
 
-1. **Status code**: e.g. `200`, `201`, `404`, `422`
-2. **Contract**: the body is parsed with a Zod schema, so a missing field, a wrong type, or an unexpected enum value fails the test with a clear message
-3. **Data**: the values match what was sent (`toMatchObject`) or what was searched for (`toContainEqual`)
+Redline uses the `@TC-` ID to keep a test's history when it is renamed. The rules:
 
-Other conventions:
+1. Every test has exactly one `@TC-` tag in capitals, e.g. `@TC-BRD-001` or `@TC-00323`.
+2. IDs are unique and never reused.
+3. Don't change a test's ID and its name in the same PR.
+4. Don't rename the Playwright project (`toolshop`).
 
-- **Tests create their own data.** Preconditions (e.g. creating a brand before reading, updating or deleting it) run inside the test, so tests do not depend on existing data or on each other.
-- **Writes are verified with a follow-up read.** After creating or updating a brand, the test fetches it by ID to confirm it was actually saved, not just echoed back.
-- **Data-driven tests.** Scenarios that differ only by input are generated with a `for...of` loop, so each case is reported separately.
-- **Test data factories.** `createBrandPayload()` and `updateBrandPayload()` return valid defaults; each test overrides only the fields relevant to its scenario.
-- **Test case IDs as tags.** `test("...", { tag: "@TC-BRD-001" }, ...)`. Redline uses the tag as the test case ID in its reports.
-
-### Test conventions
-
-Redline uses the `@TC-` ID to recognise a test after it is renamed (title, `describe` or file), so its history (last pass, failure groups) carries over. That only works if everyone follows these rules:
-
-1. **Every test has exactly one `@TC-` tag**, in capitals: `TC-` then letters, digits and dashes, e.g. `@TC-BRD-001` or `@TC-00323`.
-2. **IDs are unique and never reused**, also after a test is deleted.
-3. **Don't change a test's ID and its name in the same PR.** Change one, merge, then the other; otherwise Redline sees a new test.
-4. **Don't rename the Playwright project** (`toolshop`). It is part of the test's identity, because the same test can run in several projects.
-
-Rules 1 and 2 are checked in CI with `npm run check:ids` (no tests are run). Rules 3 and 4 are on the PR checklist.
-
-## Test Cases
-
-### Toolshop: Brands (`brand.spec.ts`, Sprint 1)
-
-| ID         | Test            | Type     | Expected                                                                |
-| ---------- | --------------- | -------- | ----------------------------------------------------------------------- |
-| TC-BRD-001 | Get all brands  | Positive | 200, list matches schema                                                |
-| TC-BRD-002 | Create brand    | Positive | 201, response matches payload                                           |
-| TC-BRD-003 | Get brand by id | Positive | 200, the created brand is returned (id, name, slug)                     |
-| TC-BRD-004 | Update brand    | Positive | 200 `success: true`, a follow-up GET returns the new name/slug          |
-| TC-BRD-005 | Delete brand    | Positive | Delete succeeds, a follow-up GET returns 404 `Requested item not found` |
+Rules 1 and 2 are checked in CI (`npm run check:ids`); 3 and 4 are on the PR checklist.
 
 ## Failure triage with Redline
 
-`reporters/redline.ts` sends every run to a [Redline](https://github.com/ega-septian/redline) server. Failures with the same cause are grouped into one incident and explained in the terminal and in `test-results/redline-report.md`:
+```mermaid
+flowchart LR
+    A[npx playwright test] -->|reporter| B[Redline server]
+    B --> C{Cause}
+    C --> D[Backend bug]
+    C --> E[Test bug]
+    C --> F[Environment / flaky]
+    D & E & F --> G[Terminal summary<br/>+ redline-report.md]
+```
+
+Rules decide first; the AI is only asked when they can't. Each failure in the report comes with a curl command to reproduce it.
+
+| Command                                      | What it does                                          |
+| -------------------------------------------- | ----------------------------------------------------- |
+| `REDLINE_AI=1 npx playwright test`           | Run the tests and explain each failure                |
+| `npm run redline:verify`                     | Prove the cause by rerunning and patching in a copy   |
+| `npm run redline -- impact schemas/brand.ts` | Tests affected by a file or endpoint, with a `--grep` |
+| `npm run redline -- score`                   | How often Redline's guesses turned out right          |
+| `npm run redline:bench`                      | Benchmark with planted bugs (below)                   |
+
+Without a Redline server the tests run normally. Set `REDLINE=0` to turn it off.
+
+**Benchmark** (planted bugs, Claude Haiku 5.5): new test 92–96%, test that passed before 96–100%, app upgrade 6/6, shared code 18/18. **No wrong guesses**; unsure cases are reported as "unclear". Scenarios: `--scenario=history|cold|upgrade|kag`.
+
+## Project structure
 
 ```
-[redline] run #12 · 8 Okt 2026, 19.36 WIB: 40 lulus, 9 gagal, 0 flaky, 1 skip
-  #  INSIDEN                    TEST  STATUS  KATEGORI     PENYEBAB
-  1  POST /users/login → 500       8  BARU    BUG BACKEND  API membalas 500 padahal test…
+tests/api/toolshop/
+├── brand.spec.ts           # tests, one describe per endpoint
+├── schemas/                # Zod schemas: expected response shapes
+├── data/                   # test data factories
+├── types/                  # request payload types
+└── helper/                 # shared helpers
+fixtures/redline.ts         # records response shapes and a curl per request
+reporters/redline.ts        # sends results to Redline
+scripts/                    # Redline CLI, benchmark, check-test-ids
+redline-bench/              # benchmark specs and planted bugs
 ```
-
-The report includes a **curl command for every request of a failed test** (secrets redacted), so a failure can be reproduced outside Playwright.
-
-| Command                                             | What it does                                                                                                                                                                                             |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REDLINE_AI=1 npx playwright test`                  | Also asks Redline for the cause of each incident (rules first, AI only when needed)                                                                                                                      |
-| `npm run redline:verify`                            | Proves the cause: reruns the failed test as-is (flaky?), then lets the AI patch the test in a copy of the project and reruns it. A patch that makes the test pass is saved under `test-results/redline/` |
-| `REDLINE_AI=1 REDLINE_VERIFY=1 npx playwright test` | Both in one go: analyse, then prove each new failure right after the run (local only, skipped in CI)                                                                                                     |
-| `npm run redline:learn`                             | Turns proven cases into regex rules, backtested against past failures; `npm run redline -- approve <id>` activates one                                                                                   |
-| `npm run redline -- score`                          | How often the rule and AI guesses turned out right, compared with proof                                                                                                                                  |
-| `npm run redline -- impact schemas/brand.ts`        | Which tests depend on a file (through any chain of imports), with a `--grep` to run only them; also works with an endpoint: `impact GET /brands/1`                                                       |
-
-What the reporter sends: test results, a hash of each test's code, the local files each test imports, the shape of API responses (field names and types, no values), and **the source code of failed tests** so the AI can read it. Secrets in code and messages are redacted by the server.
-
-### Benchmark
-
-`npm run redline:bench` measures how accurate Redline is. Bugs with known answers are planted in a copy of the project (wrong test code, a proxy that breaks Toolshop responses, wrong base URL), and each one is analysed by a separate Redline server with its own Neo4j database (`bench-<scenario>`, emptied on start).
-
-| Scenario                                                           | Correct             | Wrong guesses |
-| ------------------------------------------------------------------ | ------------------- | ------------- |
-| New test, no history (24 bugs)                                     | 92–96%              | 0             |
-| Test that passed before (24 bugs)                                  | 96–100%             | 0             |
-| App upgrade: outdated test vs regression (6 cases)                 | 6/6                 | 0             |
-| Shared helper/schema and shared endpoints, `kag` (6 cases, 3 runs) | 18/18, all by rules | 0             |
-
-The remaining cases were answered "unclear" rather than guessed. Claude Haiku 5.5; the ranges are the spread between runs (AI results vary slightly). Redline v0.3.0 decides the `kag` cases with its knowledge graph instead of the AI. Options: `--scenario=history|cold|upgrade|kag` (`kag`: specs with nested imports and a shared endpoint, the baseline for knowledge-augmented analysis), `--only=T01,B02`, `--memory=off`, `--contract=off`. Server logs are saved to `test-results/redline-bench/server-<scenario>.log`.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push and pull request to `main`, without starting any server:
+`.github/workflows/ci.yml` runs on every push and pull request, without starting any server:
 
-| Step           | Command                        | Catches                                        |
-| -------------- | ------------------------------ | ---------------------------------------------- |
-| Type check     | `npx tsc -p .`                 | Wrong types, typos in field names, bad imports |
-| Lint           | `npm run lint`                 | Missing `await`, unused code, leftover `.only` |
-| Format         | `npm run format:check`         | Code not formatted with Prettier               |
-| All specs load | `npx playwright test --list`   | Specs that fail to load (syntax, imports)      |
-| Security audit | `npm audit --audit-level=high` | Vulnerable dependencies (warning only)         |
+| Step           | Catches                                        |
+| -------------- | ---------------------------------------------- |
+| Type check     | Wrong types, typos in field names, bad imports |
+| Lint           | Missing `await`, unused code, leftover `.only` |
+| Format         | Code not formatted with Prettier               |
+| All specs load | Specs that fail to load (syntax, imports)      |
+| Test case IDs  | Tests without a `@TC-` tag, or a duplicate ID  |
+| Security audit | Vulnerable dependencies (warning only)         |
 
-The Playwright tests themselves are in `.github/workflows/playwright.yml` and run manually for now
-(**Actions → Playwright Tests → Run workflow**), because the Toolshop tests need the app at
-`localhost:8091`. Next step: start Practice Software Testing with
-Docker in the workflow and run the tests on every pull request again.
+The Playwright tests need Toolshop running, so they run manually for now (**Actions → Playwright Tests → Run workflow**).

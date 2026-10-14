@@ -30,6 +30,9 @@ jobs:
         run: npx playwright test --list
         env:
           REDLINE: "0"
+      - name: Test case IDs
+        # Setiap test punya tepat satu tag @TC- yang unik (Redline memakainya untuk menyambung riwayat test).
+        run: npm run check:ids
       - name: Security audit
         # Hanya peringatan: celah di dependency tidak membuat CI merah.
         run: npm audit --audit-level=high

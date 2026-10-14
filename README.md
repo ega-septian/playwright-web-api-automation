@@ -7,7 +7,7 @@ API test automation for the Toolshop e-commerce API ([Practice Software Testing]
 - **Three-layer assertions** on every response: status code, Zod contract, data
 - **Positive, negative and boundary tests**, each with a `@TC-` test case ID
 - **Every failure explained** by Redline: backend bug, test bug, environment or flaky
-- **CI on every pull request**: types, lint, format and test case IDs
+- **CI on every pull request**: the API tests run against Toolshop in Docker, plus types, lint, format and test case IDs
 
 ## Quick start
 
@@ -122,4 +122,4 @@ redline-bench/              # benchmark specs and planted bugs
 | Test case IDs  | Tests without a `@TC-` tag, or a duplicate ID  |
 | Security audit | Vulnerable dependencies (warning only)         |
 
-The Playwright tests need Toolshop running, so they run manually for now (**Actions → Playwright Tests → Run workflow**).
+`.github/workflows/playwright.yml` runs the API tests on every pull request and push to `main`: it starts Toolshop (sprint 1, API and database only) with Docker on the runner, seeds the database, then runs `npx playwright test`. The HTML report is uploaded as an artifact.

@@ -1,21 +1,86 @@
 name: Playwright Tests
-# Sementara manual saja (tab Actions -> Playwright Tests -> Run workflow):
-# test Toolshop butuh aplikasi di localhost:8091 yang belum dijalankan di CI.
+# Menjalankan Toolshop (Practice Software Testing) dengan Docker di runner, lalu test API terhadapnya.
+# Pola ini mengikuti workflow resmi Toolshop (.github/workflows/run-tests.yml di repo mereka).
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: playwright-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Toolshop dikunci ke commit yang sama dengan yang dipakai lokal, supaya hasilnya bisa diulang.
+  TOOLSHOP_REF: 5a6ccc2668405c96de9e205beb441f34be8d9ecc
+  SPRINT: sprint1
+  DISABLE_LOGGING: "true"
+
 jobs:
   test:
-    timeout-minutes: 60
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Checkout Toolshop
+        uses: actions/checkout@v4
+        with:
+          repository: testsmith-io/practice-software-testing
+          ref: ${{ env.TOOLSHOP_REF }}
+          path: toolshop
+
+      - name: Start Toolshop (API, web server, database)
+        working-directory: toolshop
+        # UI Angular tidak dijalankan: test di project ini hanya memanggil API.
+        run: docker compose -f docker-compose.yml up -d --build laravel-api web mariadb
+
+      - name: Install API dependencies
+        working-directory: toolshop
+        run: docker compose exec -T -u root laravel-api composer install --no-dev --optimize-autoloader --ignore-platform-req=ext-ffi
+
+      - name: Wait for the database
+        working-directory: toolshop
+        run: |
+          for i in $(seq 1 30); do
+            docker compose exec -T mariadb mysqladmin ping -h localhost -u root -proot --silent && exit 0
+            sleep 2
+          done
+          echo "MariaDB tidak siap dalam 60 detik"; exit 1
+
+      - name: Create and seed the database
+        working-directory: toolshop
+        run: docker compose exec -T laravel-api php artisan migrate:refresh --seed
+
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8091/status && exit 0
+            sleep 2
+          done
+          echo "API tidak menjawab di http://localhost:8091/status"; exit 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          cache: npm
+
       - name: Install dependencies
         run: npm ci
+
       - name: Run Playwright tests
         run: npx playwright test
+        env:
+          # Belum ada server Redline di CI.
+          REDLINE: "0"
+
+      - name: Toolshop logs (on failure)
+        if: failure()
+        working-directory: toolshop
+        run: docker compose logs --tail=200 laravel-api web mariadb
+
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:

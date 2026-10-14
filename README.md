@@ -71,6 +71,7 @@ npx playwright show-report                     # open the HTML report
 npm run lint           # ESLint, incl. Playwright rules such as missing await on expect/test.step
 npm run format         # Prettier, rewrites files
 npm run format:check   # Prettier, check only
+npm run check:ids      # every test has exactly one unique @TC- tag (see Test conventions)
 ```
 
 ## Test Approach
@@ -88,6 +89,17 @@ Other conventions:
 - **Data-driven tests.** Scenarios that differ only by input are generated with a `for...of` loop, so each case is reported separately.
 - **Test data factories.** `createBrandPayload()` and `updateBrandPayload()` return valid defaults; each test overrides only the fields relevant to its scenario.
 - **Test case IDs as tags.** `test("...", { tag: "@TC-BRD-001" }, ...)`. Redline uses the tag as the test case ID in its reports.
+
+### Test conventions
+
+Redline uses the `@TC-` ID to recognise a test after it is renamed (title, `describe` or file), so its history (last pass, failure groups) carries over. That only works if everyone follows these rules:
+
+1. **Every test has exactly one `@TC-` tag**, in capitals: `TC-` then letters, digits and dashes, e.g. `@TC-BRD-001` or `@TC-00323`.
+2. **IDs are unique and never reused**, also after a test is deleted.
+3. **Don't change a test's ID and its name in the same PR.** Change one, merge, then the other; otherwise Redline sees a new test.
+4. **Don't rename the Playwright project** (`toolshop`). It is part of the test's identity, because the same test can run in several projects.
+
+Rules 1 and 2 are checked in CI with `npm run check:ids` (no tests are run). Rules 3 and 4 are on the PR checklist.
 
 ## Test Cases
 

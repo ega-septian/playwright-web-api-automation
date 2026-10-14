@@ -32,7 +32,9 @@
 - [ ] `npm run lint` passes
 - [ ] `npm run format:check` passes
 - [ ] Tests for the affected project pass:
-- [ ] New tests have a `@TC-` tag
+- [ ] `npm run check:ids` passes: every test has exactly one unique `@TC-` tag
+- [ ] No test has both its `@TC-` ID and its name (title, `describe` or file) changed in this PR
+- [ ] The Playwright project name is unchanged
 
 ## Known issues
 

@@ -11,7 +11,8 @@
     "redline": "node scripts/redline.mts",
     "redline:verify": "node scripts/redline.mts verify",
     "redline:learn": "node scripts/redline.mts learn",
-    "redline:bench": "node scripts/redline-bench.mts"
+    "redline:bench": "node scripts/redline-bench.mts",
+    "check:ids": "node scripts/check-test-ids.mts"
   },
   "keywords": [],
   "author": "",

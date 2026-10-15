@@ -110,7 +110,17 @@ REDLINE=1 REPORTPORTAL=1 npx playwright test
 
 Both get the same `redline_run` token per run, so Redline finds the right launch. The Redline server needs `REPORTPORTAL_URL` and its own `REPORTPORTAL_API_KEY`.
 
-**Benchmark** (planted bugs, Claude Haiku 5.5): new test 92–96%, test that passed before 96–100%, app upgrade 6/6, shared code 18/18. **No wrong guesses**; unsure cases are reported as "unclear". Scenarios: `--scenario=history|cold|upgrade|kag`.
+**Benchmark** (planted bugs, Claude Haiku 5.5): new test 92–96%, test that passed before 96–100%, app upgrade 6/6, shared code 18/18. **No wrong guesses**; unsure cases are reported as "unclear". Scenarios: `--scenario=history|cold|upgrade|kag|rp`.
+
+**Redline vs ReportPortal Auto-Analysis** (`--scenario=rp`, 24 planted bugs, both start with no history and get the right answer after each case, ReportPortal 5.15 with default settings):
+
+|                             | Redline                        | ReportPortal Auto-Analysis              |
+| --------------------------- | ------------------------------ | --------------------------------------- |
+| Bug seen for the first time | 24/24                          | 2/24, 6 wrong, 16 left "To Investigate" |
+| Same bug again              | 24/24 (23 from its own labels) | 21/24, 2 wrong                          |
+| Backend bugs, first time    | 9/9                            | 0/9                                     |
+
+Auto-Analysis copies labels from failures with similar logs, so it is good at repeats but labelled backend bugs as test bugs when an earlier test bug had a similar message. Caveats: one run, 24 cases, and the bugs and Redline's rules were built together, while ReportPortal ran untuned. The two are complementary: Auto-Analysis for repeats (free), Redline for new failures.
 
 ## Project structure
 

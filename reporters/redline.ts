@@ -27,6 +27,7 @@ import { execSync, spawnSync } from "node:child_process";
 import { userInfo } from "node:os";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { enrichAllureResults, type FailedTest } from "./allure-redline";
 import { importGraph, sourceFiles, sourceHash } from "./source-hash";
 
 type Options = {
@@ -145,6 +146,28 @@ export default class RedlineReporter implements Reporter {
     if (result.status !== "passed" && result.status !== "skipped") this.addSources(file);
   }
 
+  /**
+   * Kalau reporter allure-playwright terpasang, tulis analisis Redline ke hasil Allure test yang gagal
+   * (label untuk halaman Categories, penjelasan, patch yang terbukti). Hanya test yang sudah dianalisis.
+   */
+  private enrichAllure(incidents: IncidentView[]) {
+    const allure = this.config?.reporter.find(([name]) => name.includes("allure-playwright"));
+    if (!allure) return;
+    const options = (allure[1] ?? {}) as { resultsDir?: string };
+    const failed: FailedTest[] = incidents.flatMap((v) =>
+      v.analysis
+        ? v.rows.map((r) => ({
+            key: r.group.test,
+            caseId: r.id === "-" ? undefined : r.id,
+            verdict: v.analysis!,
+          }))
+        : [],
+    );
+    const dir = path.resolve(options.resultsDir ?? "allure-results");
+    const changed = enrichAllureResults(dir, failed);
+    if (changed > 0) log(`penyebab kegagalan ditambahkan ke laporan Allure (${changed} test)`);
+  }
+
   /** Graph import semua spec yang dijalankan, dengan path relatif seperti test_files. */
   private fileGraph(): Record<string, { hash: string; imports: string[] }> {
     const root = this.config?.configFile ? path.dirname(this.config.configFile) : process.cwd();
@@ -238,6 +261,7 @@ export default class RedlineReporter implements Reporter {
     const incidents = toIncidents(rows, summary.incidents ?? []);
     const ai = process.env.REDLINE_AI === "1";
     const cost = ai ? await analyze(incidents, baseURL) : 0;
+    this.enrichAllure(incidents);
     const resolved = summary.resolved.map((g) => ({ id: idOf(g), test: g.test }));
     writeLastRun(
       path.join(path.dirname(file), "redline-last-run.json"),

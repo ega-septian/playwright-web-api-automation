@@ -10,6 +10,15 @@ export default defineConfig({
   // Riwayat antar run lokal untuk grafik tren. Di CI, riwayatnya dibawa dari laporan sebelumnya.
   historyPath: "test-results/allure-history.jsonl",
   historyLimit: 20,
+  // Penyebab kegagalan dari Redline (label "redline", ditulis reporters/allure-redline.ts). Test gagal tanpa
+  // analisis Redline (REDLINE_AI tidak aktif) masuk kategori bawaan Allure.
+  categories: [
+    { name: "Backend bug (Redline)", matchers: { labels: { redline: "backend_bug" } } },
+    { name: "Test bug (Redline)", matchers: { labels: { redline: "test_bug" } } },
+    { name: "Environment (Redline)", matchers: { labels: { redline: "environment" } } },
+    { name: "Flaky (Redline)", matchers: { labels: { redline: "flaky" } } },
+    { name: "Unclear (Redline)", matchers: { labels: { redline: "unknown" } } },
+  ],
   plugins: {
     awesome: {
       options: {

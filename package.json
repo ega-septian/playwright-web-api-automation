@@ -12,7 +12,9 @@
     "redline:verify": "node scripts/redline.mts verify",
     "redline:learn": "node scripts/redline.mts learn",
     "redline:bench": "node scripts/redline-bench.mts",
-    "check:ids": "node scripts/check-test-ids.mts"
+    "check:ids": "node scripts/check-test-ids.mts",
+    "report:allure": "allure generate",
+    "report:allure:open": "allure open test-results/allure-report"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +26,8 @@
     "@playwright/test": "^1.63.0",
     "@reportportal/agent-js-playwright": "^5.5.0",
     "@types/node": "^26.6.3",
+    "allure": "^3.20.1",
+    "allure-playwright": "^3.13.0",
     "dotenv": "^18.0.5",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",

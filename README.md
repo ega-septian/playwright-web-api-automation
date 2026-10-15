@@ -18,8 +18,11 @@ npm install
 npm run test:api                         # all Toolshop tests
 npx playwright test --grep @TC-BRD-003   # one test case by its ID
 npx playwright test --grep "POST /brands" # one endpoint
-npx playwright show-report               # HTML report
+npx playwright show-report               # Playwright HTML report
+npm run report:allure:open               # Allure report (after: npm run report:allure)
 ```
+
+Every run also writes [Allure](https://allurereport.org) results. `npm run report:allure` builds an Allure Report 3 site in `test-results/allure-report` (no Java needed) with suites per endpoint, steps, `@TC-` tags and a trend across runs.
 
 Before pushing:
 

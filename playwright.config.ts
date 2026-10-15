@@ -44,6 +44,8 @@ export default defineConfig({
   outputDir: "test-results/artifacts",
   /* Setelah run, folder kosong (test yang lulus) dihapus: yang tersisa hanya test yang gagal. */
   globalTeardown: "./global-teardown.ts",
+  /* Sebelum run: hasil Allure run sebelumnya dikosongkan. */
+  globalSetup: "./global-setup.ts",
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -57,6 +59,8 @@ export default defineConfig({
     ["html"],
     // Laporan mesin (JSON) untuk diolah tool lain, misalnya triage kegagalan.
     ["json", { outputFile: "test-results/results.json" }],
+    // Hasil untuk Allure Report (npm run report:allure). Lihat allurerc.mjs.
+    ["allure-playwright", { resultsDir: "test-results/allure-results" }],
     // Kirim results.json ke Redline setelah test selesai. Harus setelah reporter "json".
     ["./reporters/redline.ts"],
     ...reportPortal,

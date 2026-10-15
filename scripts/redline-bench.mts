@@ -264,6 +264,8 @@ async function startServer(
     RETENTION_DAYS: "0",
     // Benchmark tidak boleh mengisi ReportPortal: tebakan Auto-Analysis harus berdiri sendiri.
     REPORTPORTAL_URL: "",
+    // Server benchmark hanya untuk benchmark ini (database sendiri), jadi tanpa API key.
+    REDLINE_API_KEY: "",
   };
   if (!memory) env.VOYAGE_API_KEY = ""; // ada tapi kosong: .env tidak menimpanya
   // Kontrak dibaca lewat proxy: biasanya diteruskan apa adanya, kecuali kasus upgrade yang mengubahnya.

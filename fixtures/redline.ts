@@ -2,8 +2,11 @@
  * Catat bentuk response API (field + tipe, tanpa nilai) untuk Redline, dan lampirkan curl
  * setiap request API ke report saat test gagal (header sensitif disamarkan).
  * Pakai: import { test, expect } from "../../../fixtures/redline";
+ *
+ * Kalau ReportPortal aktif (REPORTPORTAL=1), ID dari tag @TC- juga dikirim sebagai testCaseId.
  */
 import { test as base, expect, type APIResponse } from "@playwright/test";
+import { ReportingApi } from "@reportportal/agent-js-playwright";
 
 /** Contoh: "string", "null|string", ["number"], { id: "string" } */
 export type Shape = string | Shape[] | { [field: string]: Shape };
@@ -25,7 +28,17 @@ type RequestOptions = {
   multipart?: Record<string, unknown>;
 };
 
-export const test = base.extend({
+export const test = base.extend<{ reportPortalCaseId: void }>({
+  // Otomatis untuk setiap test: tidak perlu memanggil ReportingApi.setTestCaseId di tiap spec.
+  reportPortalCaseId: [
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use, testInfo) => {
+      const id = testInfo.tags.find((t) => /^@TC-/i.test(t))?.slice(1);
+      if (process.env.REPORTPORTAL === "1" && id) ReportingApi.setTestCaseId(id);
+      await use();
+    },
+    { auto: true },
+  ],
   request: async ({ request }, use, testInfo) => {
     const calls: HttpCall[] = [];
     const curls: string[] = [];

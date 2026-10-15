@@ -1,6 +1,8 @@
 name: Playwright Tests
 # Menjalankan Toolshop (Practice Software Testing) dengan Docker di runner, lalu test API terhadapnya.
 # Pola ini mengikuti workflow resmi Toolshop (.github/workflows/run-tests.yml di repo mereka).
+# Redline (dengan DozerDB) ikut berjalan di runner untuk menjelaskan kegagalan dengan aturan, tanpa AI. Laporan
+# Allure dari main diterbitkan ke GitHub Pages; riwayat trennya dibawa dari laporan sebelumnya.
 on:
   pull_request:
     branches: [main]
@@ -17,11 +19,31 @@ env:
   TOOLSHOP_REF: 5a6ccc2668405c96de9e205beb441f34be8d9ecc
   SPRINT: sprint1
   DISABLE_LOGGING: "true"
+  # Versi Redline yang dipakai di CI, dikunci supaya hasilnya bisa diulang.
+  REDLINE_REF: v0.4.0
+  PAGES_URL: https://ega-septian.github.io/playwright-web-api-automation
 
 jobs:
   test:
     timeout-minutes: 30
     runs-on: ubuntu-latest
+    outputs:
+      pages: ${{ steps.pages.outputs.artifact_id }}
+    services:
+      neo4j:
+        # Database Redline, sama dengan docker-compose.yml di repo Redline. Kosong di setiap run.
+        image: graphstack/dozerdb:5.26.27.0
+        env:
+          NEO4J_AUTH: neo4j/redline-local
+          NEO4J_server_memory_heap_max__size: 1G
+          NEO4J_server_memory_pagecache_size: 512M
+        ports:
+          - 7688:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p redline-local 'RETURN 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 40
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +84,31 @@ jobs:
           done
           echo "API tidak menjawab di http://localhost:8091/status"; exit 1
 
+      - name: Checkout Redline
+        uses: actions/checkout@v4
+        with:
+          repository: ega-septian/redline
+          ref: ${{ env.REDLINE_REF }}
+          path: redline
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: redline/go.mod
+          cache-dependency-path: redline/go.sum
+
+      - name: Start Redline
+        working-directory: redline
+        # Tanpa ANTHROPIC_API_KEY: kegagalan dijelaskan dengan aturan saja (tanpa biaya). Database baru setiap
+        # run, jadi belum ada riwayat "terakhir lulus" untuk dibandingkan.
+        run: |
+          go build -o redline-server ./cmd/server
+          nohup ./redline-server > redline.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8787/healthz && exit 0
+            sleep 1
+          done
+          echo "Redline tidak menjawab di http://localhost:8787/healthz"; cat redline.log; exit 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
@@ -70,16 +117,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Previous Allure history
+        # Riwayat tren dari laporan terakhir di GitHub Pages. Run pertama belum punya riwayat.
+        run: |
+          mkdir -p test-results
+          curl -sfL "$PAGES_URL/history.jsonl" -o test-results/allure-history.jsonl \
+            || echo "Belum ada riwayat Allure di $PAGES_URL"
+
       - name: Run Playwright tests
         run: npx playwright test
         env:
-          # Belum ada server Redline di CI.
-          REDLINE: "0"
+          # REDLINE_AI=1 meminta analisis; tanpa API key di server, yang dipakai hanya aturan.
+          REDLINE_AI: "1"
+
+      - name: Build Allure report
+        if: ${{ !cancelled() }}
+        run: |
+          npx allure generate
+          # Riwayat ikut diterbitkan, supaya run berikutnya bisa melanjutkan trennya.
+          cp test-results/allure-history.jsonl test-results/allure-report/history.jsonl
 
       - name: Toolshop logs (on failure)
         if: failure()
         working-directory: toolshop
-        run: docker compose logs --tail=200 laravel-api web mariadb
+        run: |
+          docker compose logs --tail=200 laravel-api web mariadb
+          echo "--- Redline"; tail -100 ../redline/redline.log || true
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
@@ -87,3 +150,36 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: allure-report
+          path: test-results/allure-report/
+          retention-days: 30
+
+      - name: Upload report for GitHub Pages
+        # Hanya dari main. Laporan diterbitkan juga saat ada test gagal: justru saat itu laporannya dibutuhkan.
+        id: pages
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: test-results/allure-report/
+
+  deploy:
+    needs: test
+    # Juga saat test gagal, asalkan laporannya sempat dibuat.
+    if: ${{ !cancelled() && needs.test.outputs.pages != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

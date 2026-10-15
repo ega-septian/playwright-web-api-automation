@@ -1,6 +1,9 @@
 # Playwright API Automation
 
 [![CI](https://github.com/ega-septian/playwright-web-api-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/ega-septian/playwright-web-api-automation/actions/workflows/ci.yml)
+[![Playwright Tests](https://github.com/ega-septian/playwright-web-api-automation/actions/workflows/playwright.yml/badge.svg)](https://github.com/ega-septian/playwright-web-api-automation/actions/workflows/playwright.yml)
+
+**[Latest test report (Allure)](https://ega-septian.github.io/playwright-web-api-automation/)**: published from every run on `main`, with a trend across runs and Redline's cause for each failure.
 
 API test automation for the Toolshop e-commerce API ([Practice Software Testing](https://testsmith-io.github.io/practice-software-testing/)), built with **Playwright**, **TypeScript** and **Zod**. Failed tests are triaged automatically by [Redline](https://github.com/ega-septian/redline), a failure-analysis server I built alongside this suite.
 
@@ -8,6 +11,7 @@ API test automation for the Toolshop e-commerce API ([Practice Software Testing]
 - **Positive, negative and boundary tests**, each with a `@TC-` test case ID
 - **Every failure explained** by Redline: backend bug, test bug, environment or flaky
 - **CI on every pull request**: the API tests run against Toolshop in Docker, plus types, lint, format and test case IDs
+- **Public Allure report** from `main`, updated on every merge
 
 ## Quick start
 
@@ -153,4 +157,8 @@ redline-bench/              # benchmark specs and planted bugs
 | Test case IDs  | Tests without a `@TC-` tag, or a duplicate ID  |
 | Security audit | Vulnerable dependencies (warning only)         |
 
-`.github/workflows/playwright.yml` runs the API tests on every pull request and push to `main`: it starts Toolshop (sprint 1, API and database only) with Docker on the runner, seeds the database, then runs `npx playwright test`. The HTML report is uploaded as an artifact.
+`.github/workflows/playwright.yml` runs the API tests on every pull request and push to `main`: it starts Toolshop (sprint 1, API and database only) with Docker on the runner, seeds the database, then runs `npx playwright test`.
+
+Redline runs in the same job (DozerDB as a service, Redline pinned to a release), so a failure in CI is explained in the job summary and in the Allure report. CI has no AI key: causes come from Redline's rules only, at no cost, and the database is new on every run, so there is no history of earlier runs to compare with.
+
+The Playwright and Allure reports are uploaded as artifacts. On `main`, the Allure report is also published to [GitHub Pages](https://ega-septian.github.io/playwright-web-api-automation/), even when tests fail; the trend history is carried over from the previously published report.

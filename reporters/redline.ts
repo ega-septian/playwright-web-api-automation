@@ -3,7 +3,7 @@
  *
  * Env (opsional):
  *   REDLINE_URL          default http://localhost:8787
- *   REDLINE=0            matikan
+ *   REDLINE=0            matikan (REDLINE_AI=1 atau REDLINE_VERIFY=1 tetap menyalakannya)
  *   REDLINE_APP_VERSION  versi backend, misalnya sprint5-with-bugs
  *   REDLINE_AI=1         analisis penyebab kegagalan
  *   REDLINE_AI_MAX       default 10
@@ -26,7 +26,9 @@ import type {
 import { execSync, spawnSync } from "node:child_process";
 import { userInfo } from "node:os";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import dotenv from "dotenv";
 import path from "node:path";
+import { enrichAllureResults, type FailedTest } from "./allure-redline";
 import { importGraph, sourceFiles, sourceHash } from "./source-hash";
 
 type Options = {
@@ -145,6 +147,28 @@ export default class RedlineReporter implements Reporter {
     if (result.status !== "passed" && result.status !== "skipped") this.addSources(file);
   }
 
+  /**
+   * Kalau reporter allure-playwright terpasang, tulis analisis Redline ke hasil Allure test yang gagal
+   * (label untuk halaman Categories, penjelasan, patch yang terbukti). Hanya test yang sudah dianalisis.
+   */
+  private enrichAllure(incidents: IncidentView[]) {
+    const allure = this.config?.reporter.find(([name]) => name.includes("allure-playwright"));
+    if (!allure) return;
+    const options = (allure[1] ?? {}) as { resultsDir?: string };
+    const failed: FailedTest[] = incidents.flatMap((v) =>
+      v.analysis
+        ? v.rows.map((r) => ({
+            key: r.group.test,
+            caseId: r.id === "-" ? undefined : r.id,
+            verdict: v.analysis!,
+          }))
+        : [],
+    );
+    const dir = path.resolve(options.resultsDir ?? "allure-results");
+    const changed = enrichAllureResults(dir, failed);
+    if (changed > 0) log(`penyebab kegagalan ditambahkan ke laporan Allure (${changed} test)`);
+  }
+
   /** Graph import semua spec yang dijalankan, dengan path relatif seperti test_files. */
   private fileGraph(): Record<string, { hash: string; imports: string[] }> {
     const root = this.config?.configFile ? path.dirname(this.config.configFile) : process.cwd();
@@ -172,7 +196,7 @@ export default class RedlineReporter implements Reporter {
   }
 
   async onEnd(result: FullResult) {
-    if (process.env.REDLINE === "0") return;
+    if (!redlineEnabled(this.config?.configFile)) return;
     // --list atau semua di-skip.
     if (this.testsRun === 0) return;
     // Ctrl+C: hasil tidak lengkap.
@@ -238,6 +262,7 @@ export default class RedlineReporter implements Reporter {
     const incidents = toIncidents(rows, summary.incidents ?? []);
     const ai = process.env.REDLINE_AI === "1";
     const cost = ai ? await analyze(incidents, baseURL) : 0;
+    this.enrichAllure(incidents);
     const resolved = summary.resolved.map((g) => ({ id: idOf(g), test: g.test }));
     writeLastRun(
       path.join(path.dirname(file), "redline-last-run.json"),
@@ -399,6 +424,29 @@ function git(args: string): string {
   } catch {
     return "";
   }
+}
+
+/**
+ * Redline menyala kecuali REDLINE=0. REDLINE_AI=1 dan REDLINE_VERIFY=1 butuh Redline, jadi ikut menyalakannya.
+ * Yang diketik di perintah selalu menang atas .env: `.env` REDLINE=0 + `REDLINE_AI=1 npx playwright test`
+ * menyala, dan `.env` REDLINE_AI=1 + `REDLINE=0 npx playwright test` mati.
+ */
+export function redlineEnabled(configFile?: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  let fromFile: Record<string, string> = {};
+  const file = path.join(configFile ? path.dirname(configFile) : process.cwd(), ".env");
+  try {
+    fromFile = dotenv.parse(readFileSync(file));
+  } catch {
+    // tanpa .env: semua nilai berasal dari perintah atau environment
+  }
+  // Dari perintah: nilainya ada dan tidak sama dengan yang tertulis di .env.
+  const typed = (key: string) => env[key] !== undefined && env[key] !== fromFile[key];
+  const wantsRedline = (key: string) => env[key] === "1";
+  if (typed("REDLINE")) return env.REDLINE !== "0";
+  if (typed("REDLINE_AI") && wantsRedline("REDLINE_AI")) return true;
+  if (typed("REDLINE_VERIFY") && wantsRedline("REDLINE_VERIFY")) return true;
+  if (env.REDLINE === "0") return false;
+  return true;
 }
 
 function log(msg: string) {

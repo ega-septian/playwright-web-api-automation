@@ -23,6 +23,7 @@ npm run test:api                         # all Toolshop tests
 npx playwright test --grep @TC-BRD-003   # one test case by its ID
 npx playwright test --grep "POST /brands" # one endpoint
 npx playwright show-report               # Playwright HTML report
+npm run test:allure                      # run the tests, then open the Allure report
 npm run report:allure:open               # Allure report (after: npm run report:allure)
 ```
 

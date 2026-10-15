@@ -16,6 +16,11 @@
  *   kag      spec dengan import bertingkat (spec -> helper -> schema) dan beberapa spec yang memakai endpoint
  *            yang sama (redline-bench/kag-specs, kag-cases.json). Patokan untuk Knowledge-Augmented Generation:
  *            kasus yang butuh menelusuri hubungan file dan endpoint, bukan hanya membaca satu test.
+ *   rp       adu akurasi dengan Auto-Analysis ReportPortal (cases.json, dua putaran): "first" = setiap bug
+ *            muncul pertama kali, "repeat" = bug yang sama terulang. Riwayat dimulai kosong di keduanya, dan
+ *            setelah setiap kasus jawaban benar diberikan ke keduanya (seperti tim yang melakukan triage).
+ *            Butuh ReportPortal lokal dan RP_API_KEY (admin) di .env; dibuat project baru redline_bench_<waktu>.
+ *            Redline tidak mengisi ReportPortal selama benchmark, supaya tebakan keduanya terpisah.
  * Setiap skenario memakai server Redline sendiri dengan database Neo4j terpisah (bench-<skenario>) yang
  * dikosongkan dulu setiap kali mulai, jadi data Redline yang biasa tidak tercampur.
  *
@@ -40,7 +45,9 @@ import {
 import http from "node:http";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { makeSandbox, resetSandbox } from "./sandbox.mts";
+import * as RPBench from "./reportportal-bench.mts";
 
 const ROOT = process.cwd();
 const REDLINE_DIR = process.env.REDLINE_DIR || path.join(homedir(), "Developer", "redline");
@@ -53,6 +60,8 @@ const CONFIGS: Record<string, string> = {
 };
 const DEFAULT_CONFIG = "redline-bench/playwright.bench.config.ts";
 let config = DEFAULT_CONFIG; // diganti per skenario
+let rp: RPBench.RP | null = null; // skenario rp: project ReportPortal benchmark
+let runToken = ""; // token run terakhir (atribut redline_run di launch ReportPortal)
 const OUT_DIR = path.join(ROOT, "test-results", "redline-bench");
 
 type Category = "test_bug" | "backend_bug" | "environment";
@@ -105,6 +114,8 @@ type Result = {
   similar?: number;
   cost: number;
   note?: string;
+  pass?: "first" | "repeat"; // skenario rp
+  rp?: { predicted: string; issueType: string; auto: boolean }; // tebakan Auto-Analysis ReportPortal
 };
 
 // ---------- proxy: meneruskan ke Toolshop, atau merusak response sesuai kasus ----------
@@ -251,6 +262,8 @@ async function startServer(
     NEO4J_DATABASE_RESET: "1",
     STATUS_FROM: "all",
     RETENTION_DAYS: "0",
+    // Benchmark tidak boleh mengisi ReportPortal: tebakan Auto-Analysis harus berdiri sendiri.
+    REPORTPORTAL_URL: "",
   };
   if (!memory) env.VOYAGE_API_KEY = ""; // ada tapi kosong: .env tidak menimpanya
   // Kontrak dibaca lewat proxy: biasanya diteruskan apa adanya, kecuali kasus upgrade yang mengubahnya.
@@ -306,9 +319,20 @@ async function runSpecs(sandbox: string, grep: string | null, baseURL?: string):
     cwd: sandbox,
     env: {
       ...process.env,
+      // Eksplisit: .env project (ikut tersalin ke sandbox) boleh berisi REDLINE=0 untuk debug sehari-hari.
+      REDLINE: "1",
       REDLINE_URL: SERVER_URL,
       REDLINE_AI: "0",
       BENCH_BASE_URL: baseURL ?? `http://localhost:${PROXY_PORT}/`,
+      ...(rp
+        ? {
+            REPORTPORTAL: "1",
+            RP_API_KEY: rp.key,
+            RP_PROJECT: rp.project,
+            RP_LAUNCH: "bench",
+            REDLINE_RUN_TOKEN: (runToken = randomUUID()),
+          }
+        : { REPORTPORTAL: "0" }),
     },
   });
   let output = "";
@@ -369,6 +393,7 @@ async function runCase(
   scenario: string,
   c: Case,
   memory: boolean,
+  pass?: "first" | "repeat",
 ): Promise<Result> {
   const base: Result = {
     scenario,
@@ -377,6 +402,7 @@ async function runCase(
     truth: c.truth,
     status: "error",
     cost: 0,
+    pass,
   };
   try {
     for (const e of [...(c.edit ? [c.edit] : []), ...(c.edits ?? [])]) applyEdit(sandbox, e);
@@ -394,12 +420,23 @@ async function runCase(
       "POST",
       `/api/groups/${fp}/analyze?force=1`,
     );
-    if (a.source === "human") {
+    // Putaran repeat (skenario rp): bug yang sama terulang, jadi Redline memakai label yang sudah ada.
+    // Itu memang jawabannya, setara dengan Auto-Analysis yang menyalin label lama.
+    if (a.source === "human" && pass !== "repeat") {
       return {
         ...base,
         status: "not_failed",
         note: "kelompok sama dengan kasus sebelumnya (sudah dilabeli)",
       };
+    }
+    let rpGuess: Result["rp"];
+    if (rp) {
+      const launchId = await RPBench.waitForAnalysis(rp, runToken);
+      const g = await RPBench.guessFor(rp, launchId, c.test.slice(1));
+      if (!g) throw new Error(`test ${c.test} tidak ditemukan di launch ReportPortal`);
+      rpGuess = { predicted: g.predicted, issueType: g.issueType, auto: g.auto };
+      // Triage oleh "tim": jawaban benar menjadi riwayat Auto-Analysis berikutnya.
+      if (pass === "first") await RPBench.label(rp, g.itemId, c.truth, `benchmark: ${c.about}`);
     }
     // Upgrade: error yang sama persis bisa punya penyebab berbeda (kontrak berubah atau tidak), jadi kasus
     // tidak diberi label; label akan menimpa analisis kasus berikutnya yang kelompoknya sama.
@@ -419,6 +456,7 @@ async function runCase(
       correct: a.category === c.truth,
       similar: a.similar?.length ?? 0,
       cost: a.source === "ai" ? a.cost_usd : 0,
+      rp: rpGuess,
     };
   } catch (e) {
     return { ...base, note: (e as Error).message.slice(0, 200) };
@@ -438,7 +476,7 @@ const names: Record<string, string> = {
   flaky: "FLAKY",
   unknown: "BELUM JELAS",
 };
-const sources: Record<string, string> = { rule: "aturan", ai: "AI" };
+const sources: Record<string, string> = { rule: "aturan", ai: "AI", human: "ingatan (label)" };
 const pct = (n: number, d: number) => (d === 0 ? "-" : `${Math.round((n / d) * 100)}%`);
 
 function summarize(results: Result[], scenario: string, memory: boolean): string {
@@ -487,6 +525,84 @@ function summarize(results: Result[], scenario: string, memory: boolean): string
   return out.join("\n");
 }
 
+/** Laporan skenario rp: Redline dan Auto-Analysis ReportPortal pada kasus yang sama, per putaran. */
+function summarizeRp(results: Result[]): string {
+  const out = [
+    "## Adu akurasi: Redline vs Auto-Analysis ReportPortal",
+    "",
+    "Riwayat dimulai kosong di keduanya. Setelah setiap kasus di putaran pertama, jawaban benar diberikan ke keduanya.",
+    "ReportPortal memakai pengaturan bawaan (Auto-Analysis aktif, kemiripan minimal 95%).",
+    "",
+    "| Putaran | Kasus | Redline benar | Redline salah | Redline tidak menebak | ReportPortal benar | ReportPortal salah | ReportPortal tidak menebak |",
+    "|---|---|---|---|---|---|---|---|",
+  ];
+  const count = (rows: Result[], pick: (r: Result) => string | undefined) => {
+    const ok = rows.filter((r) => pick(r) === r.truth).length;
+    const unk = rows.filter((r) => pick(r) === "unknown").length;
+    return [ok, rows.length - ok - unk, unk];
+  };
+  for (const pass of ["first", "repeat"] as const) {
+    const rows = results.filter(
+      (r) => r.scenario === "rp" && r.pass === pass && r.status === "graded",
+    );
+    const [rlOk, rlBad, rlUnk] = count(rows, (r) => r.predicted);
+    const [rpOk, rpBad, rpUnk] = count(rows, (r) => r.rp?.predicted);
+    const label = pass === "first" ? "Bug pertama kali muncul" : "Bug yang sama terulang";
+    out.push(
+      `| ${label} | ${rows.length} | **${rlOk}** (${pct(rlOk, rows.length)}) | ${rlBad} | ${rlUnk} | **${rpOk}** (${pct(rpOk, rows.length)}) | ${rpBad} | ${rpUnk} |`,
+    );
+  }
+  const first = results.filter(
+    (r) => r.scenario === "rp" && r.pass === "first" && r.status === "graded",
+  );
+  out.push(
+    "",
+    "Putaran pertama per jenis bug:",
+    "",
+    "| Jawaban benar | Redline | ReportPortal |",
+    "|---|---|---|",
+  );
+  for (const cat of ["test_bug", "backend_bug", "environment"]) {
+    const g = first.filter((r) => r.truth === cat);
+    out.push(
+      `| ${names[cat]} | ${g.filter((r) => r.correct).length}/${g.length} | ${g.filter((r) => r.rp?.predicted === cat).length}/${g.length} |`,
+    );
+  }
+  const mark = (pred: string | undefined, truth: string) =>
+    pred === truth ? "✅" : pred === "unknown" || !pred ? "➖" : "❌";
+  out.push(
+    "",
+    "| Putaran | Kasus | Bug | Jawaban | Redline | ReportPortal |",
+    "|---|---|---|---|---|---|",
+  );
+  for (const r of results.filter((r) => r.scenario === "rp")) {
+    const rl =
+      r.status === "graded"
+        ? `${mark(r.predicted, r.truth)} ${names[r.predicted!] ?? r.predicted} (${sources[r.source!] ?? r.source})`
+        : `⚠️ ${r.note}`;
+    const rpg = r.rp
+      ? `${mark(r.rp.predicted, r.truth)} ${names[r.rp.predicted] ?? "To Investigate"}${r.rp.auto ? " (AA)" : ""}`
+      : "-";
+    out.push(`| ${r.pass} | ${r.id} | ${r.about} | ${names[r.truth]} | ${rl} | ${rpg} |`);
+  }
+  const cost = results.filter((r) => r.scenario === "rp").reduce((n, r) => n + r.cost, 0);
+  out.push("", `Biaya AI Redline: $${cost.toFixed(4)} · ReportPortal: gratis (tanpa AI)`, "");
+  return out.join("\n");
+}
+
+/** RP_API_KEY dari environment, atau dari .env project (benchmark dijalankan lewat npm, tanpa dotenv). */
+function rpKey(): string {
+  if (process.env.RP_API_KEY) return process.env.RP_API_KEY;
+  const file = path.join(ROOT, ".env");
+  const line = existsSync(file)
+    ? readFileSync(file, "utf8")
+        .split("\n")
+        .find((l) => l.startsWith("RP_API_KEY="))
+    : undefined;
+  if (!line) throw new Error("skenario rp butuh RP_API_KEY (admin ReportPortal) di .env");
+  return line.slice("RP_API_KEY=".length).trim();
+}
+
 // ---------- main ----------
 
 async function main() {
@@ -494,8 +610,8 @@ async function main() {
   const only = arg("only")?.split(",");
   const scenarios = arg("scenario") ? [arg("scenario")!] : ["history", "cold"];
   for (const s of scenarios) {
-    if (s !== "history" && s !== "cold" && s !== "upgrade" && s !== "kag") {
-      throw new Error(`--scenario harus history, cold, upgrade, atau kag, bukan "${s}"`);
+    if (!["history", "cold", "upgrade", "kag", "rp"].includes(s)) {
+      throw new Error(`--scenario harus history, cold, upgrade, kag, atau rp, bukan "${s}"`);
     }
   }
   const memoryArg = arg("memory") ?? "on";
@@ -515,7 +631,7 @@ async function main() {
   // kag: spec dengan import bertingkat (redline-bench/kag-cases.json).
   const casesFor = (scenario: string) =>
     load({ upgrade: "upgrade-cases.json", kag: "kag-cases.json" }[scenario] ?? "cases.json");
-  const total = scenarios.reduce((n, sc) => n + casesFor(sc).length, 0);
+  const total = scenarios.reduce((n, sc) => n + casesFor(sc).length * (sc === "rp" ? 2 : 1), 0);
 
   console.log(
     `Benchmark Redline: ${total} kasus di ${scenarios.length} skenario, ingatan ${memory ? "on" : "off"}, kontrak ${contract ? "on" : "off"}`,
@@ -527,6 +643,14 @@ async function main() {
   try {
     for (const scenario of scenarios) {
       console.log(`\n━━ skenario ${scenario}`);
+      if (scenario === "rp") {
+        const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+        rp = await RPBench.createProject(
+          { url: process.env.RP_URL || "http://localhost:8585", key: rpKey() },
+          `redline_bench_${stamp}`,
+        );
+        console.log(`  project ReportPortal: ${rp.project}`);
+      }
       const server = await startServer(bin, scenario, memory, contract);
       try {
         config = CONFIGS[scenario] ?? DEFAULT_CONFIG;
@@ -540,18 +664,26 @@ async function main() {
           }
           console.log("lulus");
         }
-        for (const c of casesFor(scenario)) {
-          process.stdout.write(`  ${c.id} ${c.about.padEnd(58)} `);
-          const r = await runCase(sandbox, scenario, c, memory);
-          results.push(r);
-          console.log(
-            r.status !== "graded"
-              ? `⚠️  ${r.note}`
-              : `${r.correct ? "✅" : r.predicted === "unknown" ? "➖" : "❌"} ${names[r.predicted!] ?? r.predicted} (${sources[r.source!] ?? r.source})`,
-          );
+        const passes = scenario === "rp" ? (["first", "repeat"] as const) : [undefined];
+        for (const pass of passes) {
+          if (pass) console.log(`  ── putaran ${pass}`);
+          for (const c of casesFor(scenario)) {
+            process.stdout.write(`  ${c.id} ${c.about.padEnd(58)} `);
+            const r = await runCase(sandbox, scenario, c, memory, pass);
+            results.push(r);
+            const rpText = r.rp
+              ? ` | RP: ${r.rp.predicted === c.truth ? "✅" : r.rp.predicted === "unknown" ? "➖" : "❌"} ${names[r.rp.predicted] ?? "To Investigate"}`
+              : "";
+            console.log(
+              r.status !== "graded"
+                ? `⚠️  ${r.note}`
+                : `${r.correct ? "✅" : r.predicted === "unknown" ? "➖" : "❌"} ${names[r.predicted!] ?? r.predicted} (${sources[r.source!] ?? r.source})${rpText}`,
+            );
+          }
         }
       } finally {
         server.kill();
+        rp = null;
       }
     }
   } finally {
@@ -564,7 +696,7 @@ async function main() {
     "",
     `${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB · ${total} bug tertanam · ingatan ${memory ? "on" : "off"} · kontrak ${contract ? "on" : "off"}`,
     "",
-    ...scenarios.map((s) => summarize(results, s, memory)),
+    ...scenarios.map((s) => (s === "rp" ? summarizeRp(results) : summarize(results, s, memory))),
   ].join("\n");
   mkdirSync(OUT_DIR, { recursive: true });
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");

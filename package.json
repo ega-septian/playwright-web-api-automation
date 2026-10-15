@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test:api": "playwright test --project=toolshop",
+    "test:allure": "node scripts/test-allure.mts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

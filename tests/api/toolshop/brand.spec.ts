@@ -1,4 +1,4 @@
-import { test, expect } from "../../../fixtures/redline";
+import { test, expect } from "redline-playwright/fixture";
 import { createBrandPayload, updateBrandPayload } from "./data/brand.data";
 import {
   BrandListResponseSchema,

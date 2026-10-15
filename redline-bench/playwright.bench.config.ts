@@ -26,7 +26,7 @@ export default defineConfig({
   workers: 1,
   reporter: [
     ["json", { outputFile: "test-results/results.json" }],
-    ["../reporters/redline.ts"],
+    ["redline-playwright/reporter"],
     ...reportPortal,
   ],
   use: { baseURL: process.env.BENCH_BASE_URL || "http://localhost:8095/" },

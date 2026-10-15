@@ -1,6 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { z } from "zod";
-import { expect, test } from "../../fixtures/redline";
+import { expect, test } from "redline-playwright/fixture";
 
 // Spec dasar benchmark Redline: semuanya harus lulus. Bug ditanam oleh scripts/redline-bench.mts.
 const BrandSchema = z.object({ id: z.number(), name: z.string(), slug: z.string() });

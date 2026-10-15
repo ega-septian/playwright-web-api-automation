@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { expect, test } from "../../fixtures/redline";
+import { expect, test } from "redline-playwright/fixture";
 import { getBrand } from "./helpers/brands";
 
 const ProductSchema = z.object({

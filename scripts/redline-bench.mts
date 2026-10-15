@@ -46,7 +46,7 @@ import http from "node:http";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { makeSandbox, resetSandbox } from "./sandbox.mts";
+import { makeSandbox, resetSandbox } from "redline-playwright/sandbox";
 import * as RPBench from "./reportportal-bench.mts";
 
 const ROOT = process.cwd();

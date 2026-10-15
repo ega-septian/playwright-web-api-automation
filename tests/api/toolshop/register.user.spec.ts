@@ -1,4 +1,4 @@
-import { expect, test } from "../../../fixtures/redline";
+import { expect, test } from "redline-playwright/fixture";
 import { createUserPayload } from "./data/user.data";
 import { RegisterUserResponse } from "./schemas/user.schema";
 import { toExpectedUser } from "./helper/user.helper";

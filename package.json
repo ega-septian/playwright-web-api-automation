@@ -8,9 +8,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "redline": "node scripts/redline.mts",
-    "redline:verify": "node scripts/redline.mts verify",
-    "redline:learn": "node scripts/redline.mts learn",
+    "redline": "redline",
+    "redline:verify": "redline verify",
+    "redline:learn": "redline learn",
     "redline:bench": "node scripts/redline-bench.mts",
     "check:ids": "node scripts/check-test-ids.mts",
     "report:allure": "allure generate",
@@ -33,6 +33,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-playwright": "^2.12.1",
     "prettier": "^3.9.9",
+    "redline-playwright": "github:ega-septian/redline#v0.5.0",
     "typescript-eslint": "^8.71.1"
   },
   "dependencies": {

@@ -3,6 +3,7 @@
  *
  * Env (opsional):
  *   REDLINE_URL          default http://localhost:8787
+ *   REDLINE_API_KEY      kalau server Redline memakai API key (sama dengan REDLINE_API_KEY di server)
  *   REDLINE=0            matikan (REDLINE_AI=1 atau REDLINE_VERIFY=1 tetap menyalakannya)
  *   REDLINE_APP_VERSION  versi backend, misalnya sprint5-with-bugs
  *   REDLINE_AI=1         analisis penyebab kegagalan
@@ -235,7 +236,7 @@ export default class RedlineReporter implements Reporter {
     try {
       res = await fetch(`${baseURL}/api/runs?${params}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: `{"playwright":${readFileSync(file, "utf8")},"test_hashes":${JSON.stringify(this.hashes)},"test_files":${JSON.stringify(this.files)},"sources":${JSON.stringify(this.sources)},"files":${JSON.stringify(this.fileGraph())}}`,
         signal: AbortSignal.timeout(15_000),
       });
@@ -245,6 +246,12 @@ export default class RedlineReporter implements Reporter {
         timedOut
           ? `server di ${baseURL} tidak membalas dalam 15 detik, hasil mungkin tidak tersimpan. Cek log server Redline.`
           : `server tidak bisa dihubungi di ${baseURL}, hasil tidak dikirim. (Matikan dengan REDLINE=0)`,
+      );
+      return;
+    }
+    if (res.status === 401) {
+      log(
+        "server Redline menolak API key (kosong atau salah): isi REDLINE_API_KEY di .env dengan key yang sama seperti di server.",
       );
       return;
     }
@@ -344,6 +351,7 @@ export default class RedlineReporter implements Reporter {
 async function scoreLine(baseURL: string): Promise<string> {
   try {
     const res = await fetch(`${baseURL}/api/scoreboard?limit=1`, {
+      headers: authHeaders(),
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) return "";
@@ -372,7 +380,7 @@ async function requestReportPortal(baseURL: string, runId: number) {
   try {
     const res = await fetch(
       `${baseURL}/api/runs/${runId}/reportportal?${new URLSearchParams({ token })}`,
-      { method: "POST", signal: AbortSignal.timeout(5000) },
+      { method: "POST", headers: authHeaders(), signal: AbortSignal.timeout(5000) },
     );
     if (res.status === 202) {
       log("ReportPortal akan diisi penyebab kegagalan dari Redline setelah launch selesai");
@@ -449,6 +457,12 @@ export function redlineEnabled(configFile?: string, env: NodeJS.ProcessEnv = pro
   return true;
 }
 
+/** Header API key untuk server Redline yang memakai REDLINE_API_KEY. Kosong kalau tidak diatur. */
+export function authHeaders(): Record<string, string> {
+  const key = process.env.REDLINE_API_KEY;
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
 function log(msg: string) {
   console.log(`\n[redline] ${msg}`);
 }
@@ -520,6 +534,7 @@ async function analyze(incidents: IncidentView[], baseURL: string): Promise<numb
         `${baseURL}/api/groups/${v.representative.group.fingerprint}/analyze${force ? "?force=1" : ""}`,
         {
           method: "POST",
+          headers: authHeaders(),
           signal: AbortSignal.timeout(90_000),
         },
       );

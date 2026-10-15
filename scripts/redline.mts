@@ -20,6 +20,7 @@
  *
  * Env (opsional):
  *   REDLINE_URL               default dari redline-last-run.json, lalu http://localhost:8787
+ *   REDLINE_API_KEY           kalau server Redline memakai API key (dibaca juga dari .env)
  *   REDLINE_VERIFY_MAX        kegagalan yang diuji per perintah, default 3
  *   REDLINE_VERIFY_ATTEMPTS   percobaan patch per kegagalan, default 2
  *   REDLINE_RERUNS            berapa kali rerun, default 2
@@ -29,9 +30,12 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import path from "node:path";
+import dotenv from "dotenv";
 import { git, makeSandbox, resetSandbox } from "./sandbox.mts";
 
 const ROOT = process.cwd();
+// REDLINE_API_KEY dan REDLINE_URL dari .env project. Nilai dari perintah tidak ditimpa.
+dotenv.config({ path: path.join(ROOT, ".env"), quiet: true });
 const RESULTS_DIR = path.join(ROOT, "test-results");
 const LAST_RUN = path.join(RESULTS_DIR, "redline-last-run.json");
 
@@ -89,7 +93,12 @@ async function api<T>(method: string, url: string, body?: unknown): Promise<T> {
   try {
     res = await fetch(baseURL() + url, {
       method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(process.env.REDLINE_API_KEY
+          ? { Authorization: `Bearer ${process.env.REDLINE_API_KEY}` }
+          : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(180_000),
     });

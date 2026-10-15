@@ -246,6 +246,10 @@ export default class RedlineReporter implements Reporter {
       incidents,
     );
 
+    if (process.env.REPORTPORTAL === "1" && summary.failed > 0) {
+      await requestReportPortal(baseURL, summary.run_id);
+    }
+
     const mdFile = path.join(path.dirname(file), "redline-report.md");
     const when = jakartaTime(result.startTime);
     const md = markdownReport(summary, incidents, resolved, baseURL, cost, when, this.curls);
@@ -333,6 +337,30 @@ async function scoreLine(baseURL: string): Promise<string> {
 }
 
 /** Kegagalan run ini untuk CLI eksperimen (scripts/redline.mts). Satu entri per insiden: wakilnya saja. */
+/**
+ * Minta Redline mengisi jenis defect dan komentar di launch ReportPortal run ini (atribut redline_run).
+ * Redline mengerjakannya di background: launch baru ditutup agen ReportPortal setelah reporter ini selesai.
+ */
+async function requestReportPortal(baseURL: string, runId: number) {
+  const token = process.env.REDLINE_RUN_TOKEN;
+  if (!token) return;
+  try {
+    const res = await fetch(
+      `${baseURL}/api/runs/${runId}/reportportal?${new URLSearchParams({ token })}`,
+      { method: "POST", signal: AbortSignal.timeout(5000) },
+    );
+    if (res.status === 202) {
+      log("ReportPortal akan diisi penyebab kegagalan dari Redline setelah launch selesai");
+    } else if (res.status === 404) {
+      log("integrasi ReportPortal belum diatur di server Redline (REPORTPORTAL_URL)");
+    } else {
+      log(`ReportPortal tidak diisi (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    }
+  } catch {
+    log("ReportPortal tidak diisi: server Redline tidak menjawab");
+  }
+}
+
 function writeLastRun(file: string, url: string, r: IngestResult, incidents: IncidentView[]) {
   const failures = incidents.map((v) => ({
     fingerprint: v.representative.group.fingerprint,

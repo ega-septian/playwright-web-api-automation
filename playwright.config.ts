@@ -1,7 +1,14 @@
 import { defineConfig, type ReporterDescription } from "@playwright/test";
 import dotenv from "dotenv";
+import { randomUUID } from "node:crypto";
 import path from "path";
 dotenv.config({ path: path.resolve(__dirname, ".env") });
+
+/*
+ * Satu token per `playwright test`: dipasang sebagai atribut launch ReportPortal (redline_run) dan dikirim
+ * reporter Redline, supaya Redline bisa menemukan launch yang sama dan mengisi penyebab kegagalannya.
+ */
+process.env.REDLINE_RUN_TOKEN ??= randomUUID();
 
 /*
  * ReportPortal: mati secara default supaya run debug tidak tercatat, nyalakan dengan REPORTPORTAL=1.
@@ -19,7 +26,10 @@ const reportPortal: ReporterDescription[] =
             project: process.env.RP_PROJECT ?? "superadmin_personal",
             launch: process.env.RP_LAUNCH ?? "Toolshop API",
             description: "Playwright API tests for Toolshop (Practice Software Testing)",
-            attributes: [{ key: "app", value: "toolshop" }],
+            attributes: [
+              { key: "app", value: "toolshop" },
+              { key: "redline_run", value: process.env.REDLINE_RUN_TOKEN },
+            ],
             includeTestSteps: true,
             // Test yang sengaja di-skip bukan masalah: jangan masuk "To Investigate".
             skippedIssue: false,

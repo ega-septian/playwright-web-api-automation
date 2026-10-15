@@ -30,11 +30,16 @@ type RequestOptions = {
 
 export const test = base.extend<{ reportPortalCaseId: void }>({
   // Otomatis untuk setiap test: tidak perlu memanggil ReportingApi.setTestCaseId di tiap spec.
+  // testCaseId dipakai ReportPortal untuk riwayat, tapi tidak tampil; atribut "tc" tampil di bawah nama
+  // test dan bisa difilter (Add filter → Attribute → tc:TC-BRD-001).
   reportPortalCaseId: [
     // eslint-disable-next-line no-empty-pattern
     async ({}, use, testInfo) => {
       const id = testInfo.tags.find((t) => /^@TC-/i.test(t))?.slice(1);
-      if (process.env.REPORTPORTAL === "1" && id) ReportingApi.setTestCaseId(id);
+      if (process.env.REPORTPORTAL === "1" && id) {
+        ReportingApi.setTestCaseId(id);
+        ReportingApi.addAttributes([{ key: "tc", value: id }]);
+      }
       await use();
     },
     { auto: true },

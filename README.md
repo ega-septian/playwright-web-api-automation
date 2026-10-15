@@ -89,6 +89,8 @@ flowchart LR
 
 Rules decide first; the AI is only asked when they can't. Each failure in the report comes with a curl command to reproduce it.
 
+The reporter, the fixture and the CLI come from the Redline repo as the `redline-playwright` package (`npm i -D github:ega-septian/redline#<tag>`), pinned in `package.json`.
+
 | Command                                      | What it does                                          |
 | -------------------------------------------- | ----------------------------------------------------- |
 | `REDLINE_AI=1 npx playwright test`           | Run the tests and explain each failure                |
@@ -138,9 +140,7 @@ tests/api/toolshop/
 ├── data/                   # test data factories
 ├── types/                  # request payload types
 └── helper/                 # shared helpers
-fixtures/redline.ts         # records response shapes and a curl per request
-reporters/redline.ts        # sends results to Redline
-scripts/                    # Redline CLI, benchmark, check-test-ids
+scripts/                    # benchmark, check-test-ids
 redline-bench/              # benchmark specs and planted bugs
 ```
 

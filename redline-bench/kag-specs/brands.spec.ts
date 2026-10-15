@@ -1,4 +1,4 @@
-import { expect, test } from "../../fixtures/redline";
+import { expect, test } from "redline-playwright/fixture";
 import { getBrand, listBrands } from "./helpers/brands";
 
 // Spec dasar skenario KAG: semuanya harus lulus. Bug ditanam oleh scripts/redline-bench.mts.

@@ -12,8 +12,6 @@
   },
   "include": [
     "tests/**/*.ts",
-    "reporters/**/*.ts",
-    "fixtures/**/*.ts",
     "scripts/**/*.mts",
     "redline-bench/**/*.ts",
     "playwright.config.ts",

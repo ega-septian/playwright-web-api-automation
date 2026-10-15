@@ -6,7 +6,10 @@ export default defineConfig({
   testDir: "./kag-specs",
   retries: 0,
   workers: 1,
-  reporter: [["json", { outputFile: "test-results/results.json" }], ["../reporters/redline.ts"]],
+  reporter: [
+    ["json", { outputFile: "test-results/results.json" }],
+    ["redline-playwright/reporter"],
+  ],
   use: { baseURL: process.env.BENCH_BASE_URL || "http://localhost:8095/" },
   projects: [{ name: "bench" }],
 });

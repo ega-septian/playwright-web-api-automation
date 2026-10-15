@@ -1,4 +1,4 @@
-import { expect, test } from "../../fixtures/redline";
+import { expect, test } from "redline-playwright/fixture";
 
 // Memanggil endpoint yang sama dengan helper, tapi tanpa helper dan tanpa schema bersama.
 test.describe("kag direct", () => {

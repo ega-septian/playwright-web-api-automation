@@ -13,7 +13,7 @@ process.env.REDLINE_RUN_TOKEN ??= randomUUID();
 /*
  * ReportPortal: mati secara default supaya run debug tidak tercatat, nyalakan dengan REPORTPORTAL=1.
  * Butuh RP_API_KEY di .env (Profile → API Keys di ReportPortal). ID dari tag @TC- dikirim sebagai
- * testCaseId oleh fixtures/redline.ts, supaya riwayat test di ReportPortal tidak putus saat judul diganti.
+ * testCaseId oleh fixture redline-playwright, supaya riwayat test di ReportPortal tidak putus saat judul diganti.
  */
 const reportPortal: ReporterDescription[] =
   process.env.REPORTPORTAL === "1" && process.env.RP_API_KEY
@@ -62,7 +62,7 @@ export default defineConfig({
     // Hasil untuk Allure Report (npm run report:allure). Lihat allurerc.mjs.
     ["allure-playwright", { resultsDir: "test-results/allure-results" }],
     // Kirim results.json ke Redline setelah test selesai. Harus setelah reporter "json".
-    ["./reporters/redline.ts"],
+    ["redline-playwright/reporter"],
     ...reportPortal,
   ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */

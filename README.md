@@ -93,7 +93,7 @@ Rules decide first; the AI is only asked when they can't. Each failure in the re
 | `npm run redline -- score`                   | How often Redline's guesses turned out right          |
 | `npm run redline:bench`                      | Benchmark with planted bugs (below)                   |
 
-Without a Redline server the tests run normally. Set `REDLINE=0` to turn it off.
+Without a Redline server the tests run normally. Set `REDLINE=0` to turn it off, for example in `.env` while writing tests. `REDLINE_AI=1` or `REDLINE_VERIFY=1` on the command line turn it back on for that run; whatever you type on the command line wins over `.env`.
 
 ### ReportPortal (optional)
 

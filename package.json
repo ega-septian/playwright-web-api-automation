@@ -22,6 +22,7 @@
     "@eslint/js": "^10.0.1",
     "@faker-js/faker": "^10.6.0",
     "@playwright/test": "^1.63.0",
+    "@reportportal/agent-js-playwright": "^5.5.0",
     "@types/node": "^26.6.3",
     "dotenv": "^18.0.5",
     "eslint": "^10.12.0",

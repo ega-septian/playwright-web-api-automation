@@ -92,6 +92,16 @@ Rules decide first; the AI is only asked when they can't. Each failure in the re
 
 Without a Redline server the tests run normally. Set `REDLINE=0` to turn it off.
 
+### ReportPortal (optional)
+
+Results can also go to a local [ReportPortal](https://reportportal.io) with the official agent. It is off by default, so debug runs are not recorded:
+
+```bash
+REPORTPORTAL=1 npx playwright test
+```
+
+Needs `RP_API_KEY` in `.env` (ReportPortal → Profile → API Keys). Defaults: `RP_ENDPOINT=http://localhost:8585/api/v2`, `RP_PROJECT=superadmin_personal`, `RP_LAUNCH="Toolshop API"`. Each test's `@TC-` tag is sent as its ReportPortal test case ID, so its history survives renames; skipped tests are not marked "To Investigate".
+
 **Benchmark** (planted bugs, Claude Haiku 5.5): new test 92–96%, test that passed before 96–100%, app upgrade 6/6, shared code 18/18. **No wrong guesses**; unsure cases are reported as "unclear". Scenarios: `--scenario=history|cold|upgrade|kag`.
 
 ## Project structure

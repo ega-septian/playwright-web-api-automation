@@ -6,6 +6,8 @@
   "scripts": {
     "test:api": "playwright test --project=toolshop",
     "test:allure": "node scripts/test-allure.mts",
+    "test:ai": "node scripts/test-allure.mts --ai",
+    "test:verify": "node scripts/test-allure.mts --verify",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

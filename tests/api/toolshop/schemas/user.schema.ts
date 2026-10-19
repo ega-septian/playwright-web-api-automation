@@ -19,3 +19,9 @@ export const RegisterUserResponse = z.object({
   id: z.string(),
   created_at: z.string(),
 });
+
+export const LoginResponseSchema = z.object({
+  access_token: z.string(),
+  token_type: z.string(),
+  expires_in: z.number(),
+});

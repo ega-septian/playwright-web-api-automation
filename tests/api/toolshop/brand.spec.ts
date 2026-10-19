@@ -385,6 +385,38 @@ test.describe("PUT /brands", () => {
       });
     },
   );
+
+  test(
+    "Update brand succeeds when slug is its own slug",
+    { tag: "@TC-BRD-021" },
+    async ({ request }) => {
+      const brand = await test.step("Create new brand", async () => {
+        const response = await request.post("/brands", { data: createBrandPayload() });
+        expect(response.status()).toBe(201);
+        return BrandResponseSchema.parse(await response.json());
+      });
+
+      // Nama diganti supaya GET membuktikan update benar-benar tersimpan
+      const payload = updateBrandPayload({ slug: brand.slug });
+
+      await test.step("Update brand with its own slug", async () => {
+        const response = await request.put(`/brands/${brand.id}`, { data: payload });
+        expect(response.status()).toBe(200);
+        const data = BrandSuccessFoundSchema.parse(await response.json());
+        expect(data.success).toBe(true);
+      });
+
+      await test.step("Validate brand is updated", async () => {
+        const response = await request.get(`/brands/${brand.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual({
+          id: brand.id,
+          name: payload.name,
+          slug: brand.slug,
+        });
+      });
+    },
+  );
 });
 
 test.describe("DELETE /brands", () => {

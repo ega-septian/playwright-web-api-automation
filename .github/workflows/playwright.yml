@@ -17,7 +17,7 @@ concurrency:
 env:
   # Toolshop dikunci ke commit yang sama dengan yang dipakai lokal, supaya hasilnya bisa diulang.
   TOOLSHOP_REF: 5a6ccc2668405c96de9e205beb441f34be8d9ecc
-  SPRINT: sprint1
+  SPRINT: sprint5
   DISABLE_LOGGING: "true"
   # Versi Redline yang dipakai di CI, dikunci supaya hasilnya bisa diulang.
   REDLINE_REF: v0.4.0
@@ -129,6 +129,11 @@ jobs:
         env:
           # REDLINE_AI=1 meminta analisis; tanpa API key di server, yang dipakai hanya aturan.
           REDLINE_AI: "1"
+          # Akun dari data seed Toolshop (UserSeeder), sama untuk semua orang: bukan rahasia, jadi tidak perlu secret.
+          TOOLSHOP_ADMIN_EMAIL: admin@practicesoftwaretesting.com
+          TOOLSHOP_ADMIN_PASSWORD: welcome01
+          TOOLSHOP_CUSTOMER_EMAIL: customer@practicesoftwaretesting.com
+          TOOLSHOP_CUSTOMER_PASSWORD: welcome01
 
       - name: Build Allure report
         if: ${{ !cancelled() }}

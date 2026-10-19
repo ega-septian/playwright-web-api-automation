@@ -15,7 +15,16 @@ API test automation for the Toolshop e-commerce API ([Practice Software Testing]
 
 ## Quick start
 
-Requires Node.js 22.6+ and [Practice Software Testing](https://github.com/testsmith-io/practice-software-testing) running locally with Docker (API at `http://localhost:8091`).
+Requires Node.js 22.6+ and [Practice Software Testing](https://github.com/testsmith-io/practice-software-testing) sprint 5 running locally with Docker (API at `http://localhost:8091`, `SPRINT=sprint5`, database created with `docker exec pst-laravel-api-1 php artisan migrate:fresh --seed`).
+
+Tests that need a login read these from `.env`. They are the demo accounts from Toolshop's seed data:
+
+```bash
+TOOLSHOP_ADMIN_EMAIL=admin@practicesoftwaretesting.com
+TOOLSHOP_ADMIN_PASSWORD=welcome01
+TOOLSHOP_CUSTOMER_EMAIL=customer@practicesoftwaretesting.com
+TOOLSHOP_CUSTOMER_PASSWORD=welcome01
+```
 
 ```bash
 npm install
@@ -42,17 +51,17 @@ npm run format && npm run lint && npx tsc -p . && npm run check:ids
 
 ## Test coverage
 
-Sprint 1 · Brands (`brand.spec.ts`, 11 tests)
+Sprint 5 · Brands (`brand.spec.ts`, 20 tests)
 
 | Endpoint              | Covered                                                                                   |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | `POST /brands`        | Create; missing name or slug (422); duplicate slug (409); name length 120/121; empty body |
-| `GET /brands`         | List matches schema                                                                       |
-| `GET /brands/{id}`    | Get by id                                                                                 |
-| `PUT /brands/{id}`    | Update, verified with a follow-up read                                                    |
-| `DELETE /brands/{id}` | Delete, verified by a 404 afterwards                                                      |
+| `GET /brands`         | List matches schema; new ETag when the list changes                                       |
+| `GET /brands/{id}`    | Get by id; unknown id (404); 304 when the ETag matches                                    |
+| `PUT /brands/{id}`    | Update; unknown id (404); without name; slug of another brand (409); name length 121      |
+| `DELETE /brands/{id}` | Delete as admin, verified by a 404 afterwards; no token (401); customer token (403)       |
 
-Full list with IDs: `npx playwright test --list`. Next: categories, products and images.
+Full list with IDs: `npx playwright test --list`. Next: users and login, categories, products, cart and invoices.
 
 ## How tests are written
 
@@ -69,6 +78,7 @@ test("Create brand fails when slug already exists", { tag: "@TC-BRD-008" }, asyn
 - **Tests create their own data**, so they don't depend on seed data or on each other.
 - **Writes are verified with a follow-up read**, not just by the response.
 - **One `describe` per endpoint**, so reports and `--grep` follow the API.
+- **Logins come from fixtures**: a test asks for `adminToken` or `customerToken` and gets a token that is logged in once per worker (`tests/api/toolshop/fixtures`). Tests that check auth itself, such as a missing token, call the API without it.
 
 ## Test case IDs
 
@@ -163,7 +173,7 @@ redline-bench/              # benchmark specs and planted bugs
 | Test case IDs  | Tests without a `@TC-` tag, or a duplicate ID  |
 | Security audit | Vulnerable dependencies (warning only)         |
 
-`.github/workflows/playwright.yml` runs the API tests on every pull request and push to `main`: it starts Toolshop (sprint 1, API and database only) with Docker on the runner, seeds the database, then runs `npx playwright test`.
+`.github/workflows/playwright.yml` runs the API tests on every pull request and push to `main`: it starts Toolshop (sprint 5, API and database only) with Docker on the runner, seeds the database, then runs `npx playwright test`.
 
 Redline runs in the same job (DozerDB as a service, Redline pinned to a release), so a failure in CI is explained in the job summary and in the Allure report. CI has no AI key: causes come from Redline's rules only, at no cost, and the database is new on every run, so there is no history of earlier runs to compare with.
 

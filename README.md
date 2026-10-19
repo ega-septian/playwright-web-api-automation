@@ -24,6 +24,11 @@ npx playwright test --grep @TC-BRD-003   # one test case by its ID
 npx playwright test --grep "POST /brands" # one endpoint
 npx playwright show-report               # Playwright HTML report
 npm run test:allure                      # run the tests, then open the Allure report
+npm run test:allure TC-BRD-003           # same, for one test case
+npm run test:allure TC-BRD-001 TC-BRD-005 # several test cases
+npm run test:allure brand                # one spec file (brand.spec.ts)
+npm run test:ai TC-BRD-003               # same, with Redline's explanation (REDLINE_AI=1)
+npm run test:verify TC-BRD-003           # same, then prove the cause (REDLINE_VERIFY=1)
 npm run report:allure:open               # Allure report (after: npm run report:allure)
 ```
 

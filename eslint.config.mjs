@@ -52,6 +52,20 @@ export default tseslint.config(
       ],
     },
   },
+  // Schema response memakai z.strictObject: field yang tidak ada di kontrak ikut ketahuan (AGENTS.md: MUST, Schemas).
+  {
+    files: ["tests/**/schemas/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.object.name='z'][callee.property.name='object']",
+          message:
+            "Pakai z.strictObject, bukan z.object, supaya field yang tidak ada di kontrak ketahuan (AGENTS.md: MUST, Schemas).",
+        },
+      ],
+    },
+  },
   // Matikan aturan ESLint yang bentrok dengan Prettier (format diurus Prettier).
   prettier,
 );

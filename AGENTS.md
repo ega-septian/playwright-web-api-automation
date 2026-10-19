@@ -56,10 +56,13 @@ Rules marked **(checked)** are enforced for everyone by ESLint and CI, and for C
 
 ## Working with AI
 
+For any non-trivial task, start with the `workflow` skill: classify, explore, plan with a confidence score, wait for approval, apply, verify with the tests and Redline, report. In short:
+
 1. **One task per prompt** (one endpoint, one spec, one schema).
-2. **Plan first** for anything non-trivial: list the test cases with the contract status codes they cover, and say what is unclear. Ask instead of guessing.
-3. **Write, run, review:** run the tests with `REDLINE=0` while writing; use `npm run test:ai` to triage failures; show the result.
-4. **Commit** only after the checks pass and the user agrees.
+2. **Plan first, with Confidence (1-10), Rationale and Unknowns.** Below 5, ask instead of planning.
+3. **Change files only after the user approves the plan.**
+4. **Verify:** run the tests you touched and the pre-commit checks. Triage failures with Redline (`REDLINE_AI=1 npx playwright test --grep ...`; the user runs `npm run test:ai`) and act on its category.
+5. **Report**, then commit only when asked.
 
 The user is preparing for a QA automation interview and writes the first tests of a new area themselves. For those, review and explain; don't write them unless asked.
 
@@ -72,5 +75,5 @@ Skills are in `.claude/skills/<name>/SKILL.md`. Claude Code loads them when a ta
 | `api-testing`   | Contract-first test cases, status-code matrix, negative coverage | Ready   |
 | `fixtures`      | Auth and data fixtures, when to add one                          | Ready   |
 | `data-strategy` | Factories, invalid-value sets                                    | Ready   |
-| `workflow`      | Plan, confidence, approval, verify with Redline, report          | Phase 3 |
+| `workflow`      | Plan, confidence, approval, verify with Redline, report          | Ready   |
 | `pr-reviewer`   | Review a branch against this Constitution                        | Phase 4 |

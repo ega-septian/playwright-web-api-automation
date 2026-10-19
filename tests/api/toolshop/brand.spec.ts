@@ -305,7 +305,7 @@ test.describe("PUT /brands", () => {
     },
   );
 
-  test("Update brand success when name is empty", { tag: "@TC-BRD-016" }, async ({ request }) => {
+  test("Update brand success when name is missing", { tag: "@TC-BRD-016" }, async ({ request }) => {
     const id = await test.step("Create new brand id", async () => {
       const payload = createBrandPayload();
       const response = await request.post("/brands", {
@@ -363,15 +363,26 @@ test.describe("PUT /brands", () => {
     "Update brand fails when name exceeds 120 characters",
     { tag: "@TC-BRD-018" },
     async ({ request }) => {
-      const payload = updateBrandPayload({ name: "a".repeat(121) });
-      const response = await request.put(`/brands/1`, {
-        data: payload,
+      const brand = await test.step("Create new brand", async () => {
+        const response = await request.post("/brands", { data: createBrandPayload() });
+        expect(response.status()).toBe(201);
+        return BrandResponseSchema.parse(await response.json());
       });
-      expect(response.status()).toBe(422);
-      const body = await response.json();
 
-      const data = BrandErrorSchema.parse(body);
-      expect(data.name).toContainEqual("The name field must not be greater than 120 characters.");
+      await test.step("Verify failed to update with a 121-character name", async () => {
+        const response = await request.put(`/brands/${brand.id}`, {
+          data: updateBrandPayload({ name: "a".repeat(121) }),
+        });
+        expect(response.status()).toBe(422);
+        const data = BrandErrorSchema.parse(await response.json());
+        expect(data.name).toContainEqual("The name field must not be greater than 120 characters.");
+      });
+
+      await test.step("Validate brand is unchanged", async () => {
+        const response = await request.get(`/brands/${brand.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual(brand);
+      });
     },
   );
 });

@@ -16,6 +16,7 @@
     "redline:learn": "redline learn",
     "redline:bench": "node scripts/redline-bench.mts",
     "check:ids": "node scripts/check-test-ids.mts",
+    "contract": "node scripts/contract.mts",
     "report:allure": "allure generate",
     "report:allure:open": "allure open test-results/allure-report"
   },

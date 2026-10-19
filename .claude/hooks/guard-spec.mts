@@ -1,5 +1,5 @@
 /**
- * Hook PreToolUse Claude Code: tolak penulisan spec file yang melanggar aturan repo (AGENTS.md, Constitution),
+ * Hook PreToolUse Claude Code: tolak penulisan spec dan schema yang melanggar aturan repo (AGENTS.md, Constitution),
  * sebelum file berubah. ESLint dan check:ids di CI mengecek hal yang sama untuk semua orang; hook ini memberi
  * umpan balik lebih cepat ke AI.
  *
@@ -14,28 +14,42 @@ type Edit = { old_string?: string; new_string?: string };
 type ToolInput = { file_path?: string; content?: string; edits?: Edit[] } & Edit;
 
 const SPEC_FILE = /(^|\/)tests\/.+\.spec\.ts$/;
+const SCHEMA_FILE = /(^|\/)tests\/.+\/schemas\/.+\.ts$/;
 
-const RULES: { test: (added: string) => boolean; message: string }[] = [
+type Rule = { files: RegExp; test: (added: string) => boolean; message: string };
+
+const RULES: Rule[] = [
   {
+    files: SCHEMA_FILE,
+    test: (s) => /\bz\.object\(/.test(s),
+    message:
+      "Schema memakai z.strictObject, bukan z.object, supaya field yang tidak ada di kontrak ketahuan (MUST: Schemas).",
+  },
+  {
+    files: SPEC_FILE,
     test: (s) => /from\s+["'](@playwright\/test|redline-playwright\/fixture)["']/.test(s),
     message:
       "Spec import test dan expect dari ./fixtures, bukan @playwright/test atau redline-playwright/fixture (MUST: Imports).",
   },
   {
+    files: SPEC_FILE,
     test: (s) => /\bwaitForTimeout\s*\(/.test(s),
     message:
       "waitForTimeout dilarang. Tunggu kondisinya (status, response, assertion) (WON'T: fixed waits).",
   },
   {
+    files: SPEC_FILE,
     test: (s) => /\b(test|describe)\.only\s*\(/.test(s),
     message: "test.only atau describe.only tertinggal (WON'T: test.only).",
   },
   {
+    files: SPEC_FILE,
     test: (s) => /["'`]\/[a-z_-]+\/[0-9]+([/?"'`]|$)/m.test(s),
     message:
       "ID hardcode di URL, misalnya /brands/1. Buat datanya di test dan pakai id-nya (WON'T: hardcoded ids).",
   },
   {
+    files: SPEC_FILE,
     // Deklarasi test baru (bukan test.step/test.describe) harus membawa tag @TC- di teks yang sama.
     test: (s) => {
       const tests = s.match(/\btest\(\s*(["'`]|$)/gm)?.length ?? 0;
@@ -71,9 +85,11 @@ const { tool_name: tool, tool_input: input } = JSON.parse(readFileSync(0, "utf8"
   tool_input: ToolInput;
 };
 
-if (["Write", "Edit", "MultiEdit"].includes(tool) && SPEC_FILE.test(input.file_path ?? "")) {
+const file = input.file_path ?? "";
+const rules = RULES.filter((r) => r.files.test(file));
+if (["Write", "Edit", "MultiEdit"].includes(tool) && rules.length > 0) {
   const added = addedText(tool, input);
-  const broken = RULES.filter((r) => r.test(added)).map((r) => `- ${r.message}`);
+  const broken = rules.filter((r) => r.test(added)).map((r) => `- ${r.message}`);
   if (broken.length > 0) {
     console.error(`Ditolak oleh aturan repo (AGENTS.md):\n${broken.join("\n")}`);
     process.exit(2);

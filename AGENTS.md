@@ -17,6 +17,7 @@ npx playwright test --grep @TC-BRD-003        # one test while writing (set REDL
 npm run test:allure TC-BRD-001 TC-BRD-005     # run, then open the Allure report (also: a spec name, e.g. brand)
 npm run test:ai TC-BRD-003                    # same, with Redline's explanation of failures
 npm run format && npm run lint && npx tsc -p . && npm run check:ids   # before every commit
+npm run check:weakening                       # tests deleted, fewer expects, changed status, new skip (vs origin/main)
 ```
 
 ## Constitution
@@ -70,10 +71,10 @@ The user is preparing for a QA automation interview and writes the first tests o
 
 Skills are in `.claude/skills/<name>/SKILL.md`. Claude Code loads them when a task matches; other tools can read the files.
 
-| Skill           | Purpose                                                          | Status  |
-| --------------- | ---------------------------------------------------------------- | ------- |
-| `api-testing`   | Contract-first test cases, status-code matrix, negative coverage | Ready   |
-| `fixtures`      | Auth and data fixtures, when to add one                          | Ready   |
-| `data-strategy` | Factories, invalid-value sets                                    | Ready   |
-| `workflow`      | Plan, confidence, approval, verify with Redline, report          | Ready   |
-| `pr-reviewer`   | Review a branch against this Constitution                        | Phase 4 |
+| Skill           | Purpose                                                          | Status |
+| --------------- | ---------------------------------------------------------------- | ------ |
+| `api-testing`   | Contract-first test cases, status-code matrix, negative coverage | Ready  |
+| `fixtures`      | Auth and data fixtures, when to add one                          | Ready  |
+| `data-strategy` | Factories, invalid-value sets                                    | Ready  |
+| `workflow`      | Plan, confidence, approval, verify with Redline, report          | Ready  |
+| `pr-reviewer`   | Review a branch against this Constitution                        | Ready  |

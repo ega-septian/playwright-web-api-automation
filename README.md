@@ -155,10 +155,15 @@ tests/api/toolshop/
 ├── schemas/                # Zod schemas: expected response shapes
 ├── data/                   # test data factories
 ├── types/                  # request payload types
+├── fixtures/               # auth tokens, merged with the Redline fixture
 └── helper/                 # shared helpers
 scripts/                    # benchmark, check-test-ids
 redline-bench/              # benchmark specs and planted bugs
 ```
+
+## Working with AI
+
+AI assistants follow the rulebook in [`CLAUDE.md`](CLAUDE.md): context, commands, and a Constitution of MUST / SHOULD / WON'T rules taken from how the tests here are written. The AI setup is built in phases (guardrail hooks, skills, a verify-with-Redline workflow, a reviewer); the roadmap is in [`docs/orchestra.md`](docs/orchestra.md).
 
 ## CI
 

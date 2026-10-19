@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { faker } from "@faker-js/faker";
 import { test, expect } from "./fixtures";
 import { createBrandPayload, updateBrandPayload } from "./data/brand.data";
 import { getAllBrands } from "./helper/brand.helper";
@@ -64,7 +64,7 @@ test.describe("POST /brands", () => {
 
   test("Create brand fails when slug is missing", { tag: "@TC-BRD-007" }, async ({ request }) => {
     // Nama unik, supaya bisa dicek tidak tersimpan (tanpa slug).
-    const { slug, ...payload } = createBrandPayload({ name: `No slug ${randomUUID()}` });
+    const { slug, ...payload } = createBrandPayload({ name: `No slug ${faker.string.uuid()}` });
 
     await test.step("Create brand without slug", async () => {
       const response = await request.post("/brands", { data: payload });
@@ -150,6 +150,7 @@ test.describe("POST /brands", () => {
     "Create brand fails with empty request body",
     { tag: "@TC-BRD-011" },
     async ({ request }) => {
+      // Tidak ada GET setelahnya: body kosong tidak punya nama atau slug untuk dicari di daftar.
       const response = await request.post("/brands", { data: {} });
       expect(response.status()).toBe(422);
       const data = BrandErrorSchema.parse(await response.json());
@@ -270,7 +271,7 @@ test.describe("GET /brands/{brandId}", () => {
 
       await test.step("Get brand by id with the same ETag", async () => {
         const resp = await request.get(`/brands/${id}`, { headers: { "If-None-Match": etag } });
-        // 304 is not in the contract (GET /brands/{brandId} documents 200, 404, 405).
+        // 304 tidak ada di kontrak (GET /brands/{brandId} hanya 200, 404, 405).
         expect(resp.status()).toBe(304);
       });
     },
@@ -512,7 +513,7 @@ test.describe("DELETE /brands/{brandId}", () => {
         const response = await request.delete(`/brands/${brand.id}`, {
           headers: { Authorization: `Bearer ${customerToken}` },
         });
-        // 403 is not in the contract (DELETE /brands/{brandId} documents 204, 401, 404, 405, 409, 422).
+        // 403 tidak ada di kontrak (DELETE /brands/{brandId} hanya 204, 401, 404, 405, 409, 422).
         expect(response.status()).toBe(403);
         expect(MessageResponseSchema.parse(await response.json()).message).toBe("Forbidden");
       });

@@ -17,7 +17,7 @@ npx playwright test --grep @TC-BRD-003        # one test while writing (set REDL
 npm run test:allure TC-BRD-001 TC-BRD-005     # run, then open the Allure report (also: a spec name, e.g. brand)
 npm run test:ai TC-BRD-003                    # same, with Redline's explanation of failures
 npm run format && npm run lint && npx tsc -p . && npm run check:ids   # before every commit
-npm run check:weakening                       # tests deleted, fewer expects, changed status, new skip (vs origin/main)
+npm run check:weakening                       # tests deleted, fewer expects, a status removed or replaced, new skip (vs origin/main)
 ```
 
 ## Constitution

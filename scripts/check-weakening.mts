@@ -7,7 +7,8 @@
  *
  * Per test (dikenali dari tag @TC-): test hilang, jumlah expect berkurang, status code yang diharapkan
  * hilang atau diganti (status tambahan, misalnya GET setelah write, tidak dihitung), atau skip/fixme/only baru. Ini bukan larangan (kadang memang benar), tapi harus disetujui user.
- * Exit 1 kalau ada temuan.
+ * Status dihitung per test, bukan per langkah: status yang diganti di satu step tapi ditambah di step lain
+ * tidak ketahuan. Exit 1 kalau ada temuan.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";

@@ -20,8 +20,8 @@ npm run contract -- POST /users/register    # request body, auth, every response
 
 Toolshop's contract has these quirks:
 
-- **No field is marked `required`.** For a request, find out what is required from a 422 response. For a response schema, make the fields the API returns in that scenario required, and the fields that are documented but not returned optional. `RegisterUserResponse` in `schemas/user.schema.ts` is an example.
-- **Some status codes are missing from the contract.** For example, `POST /users/login` documents only 200, but the code also returns 401 for a wrong password and 423 for a locked account. Test the real codes, and add a comment such as `// 401 is not in the contract`. If one of those tests fails, Redline reports an undocumented status as a contract violation.
+- **No field is marked `required`.** For a request, find out what is required from a 422 response. For a response schema, make the fields the API returns in that scenario required, and the fields that are documented but not returned optional. `UserResponseSchema` in `schemas/user.schema.ts` is an example.
+- **Some status codes are missing from the contract.** For example, `POST /users/login` documents only 200, but the code also returns 401 for a wrong password and 423 for a locked account. Test the real codes, and add a comment such as `// 401 tidak ada di kontrak`. If one of those tests fails, Redline reports an undocumented status as a contract violation.
 - When the contract and `~/Developer/practice-software-testing/sprint5/API` disagree, the source code shows what really happens, and the contract is what should happen.
 
 ## 2. Test-case matrix (before any code)

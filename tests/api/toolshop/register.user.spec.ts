@@ -21,8 +21,10 @@ test.describe("POST /users/register", () => {
         return user;
       });
 
+      const token = await test.step("Log in as the new user", async () =>
+        login(request, { email: payload.email, password: payload.password }));
+
       await test.step("Validate the user is stored", async () => {
-        const token = await login(request, { email: payload.email, password: payload.password });
         const response = await request.get("/users/me", {
           headers: { Authorization: `Bearer ${token}` },
         });

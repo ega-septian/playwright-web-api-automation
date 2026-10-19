@@ -65,7 +65,7 @@ In a new area, the user writes the first tests themselves (see `AGENTS.md`). For
 1. Read the contract for that endpoint and status.
 2. **The contract allows what the API did:** the test is wrong. Fix the test, and say which part of the contract allows it. Example: TC-BRD-016, where `BrandRequest` has no required fields, so a PUT without a name returns 200.
 3. **The contract does not allow it:** the API is wrong. Keep the test as the contract says, add `test.skip` with `// FIXME: <what the API does vs the contract>`, and report it. Never change the expected status or the schema to match.
-4. **Not sure:** run `npm run test:ai <TC-ID>` and read Redline's verdict and evidence. If it is still unclear, ask the user.
+4. **Not sure:** run the test with `REDLINE_AI=1` and read Redline's verdict and evidence in `test-results/redline-report.md`. If it is still unclear, ask the user.
 
 ## 6. Verify and report
 

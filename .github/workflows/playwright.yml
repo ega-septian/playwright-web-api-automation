@@ -54,6 +54,11 @@ jobs:
           ref: ${{ env.TOOLSHOP_REF }}
           path: toolshop
 
+      - name: Make Laravel storage writable
+        # Sprint 5 menyimpan cache di file (storage/framework/cache). PHP di container berjalan sebagai uid 1000,
+        # folder hasil checkout milik user runner, jadi tanpa ini GET dan DELETE membalas 500.
+        run: chmod -R a+rwX toolshop/$SPRINT/API/storage toolshop/$SPRINT/API/bootstrap/cache
+
       - name: Start Toolshop (API, web server, database)
         working-directory: toolshop
         # UI Angular tidak dijalankan: test di project ini hanya memanggil API.

@@ -12,6 +12,7 @@ API test automation for **Toolshop** (Practice Software Testing, sprint 5) with 
 ## Commands
 
 ```bash
+npm run contract -- POST /users/login         # the contract for one endpoint (or: npm run contract -- /users)
 npx playwright test --grep @TC-BRD-003        # one test while writing (set REDLINE=0 in .env)
 npm run test:allure TC-BRD-001 TC-BRD-005     # run, then open the Allure report (also: a spec name, e.g. brand)
 npm run test:ai TC-BRD-003                    # same, with Redline's explanation of failures
@@ -28,6 +29,7 @@ Rules marked **(checked)** are enforced for everyone by ESLint and CI, and for C
 - **Test case IDs (checked):** every test has exactly one `@TC-<AREA>-<NNN>` tag (e.g. `@TC-BRD-017`), unique and never reused. Don't change a test's ID and its title in the same PR. Don't rename the Playwright project `toolshop`. Redline uses both to keep a test's history.
 - **Structure:** one `test.describe` per endpoint (`"POST /brands"`), tags on tests only.
 - **Own data:** tests create the data they need with factories from `data/` (Faker, override only what matters). Never depend on seed data ids or on another test.
+- **Schemas (checked):** response schemas in `schemas/` use `z.strictObject`, so a field that is not in the contract fails the test. Fields the API returns are required; fields documented but not returned are optional.
 - **Assertions in order:** 1. status code, 2. contract (`Schema.parse(await response.json())` with a schema from `schemas/`), 3. the values that matter for the scenario.
 - **Writes are verified with a follow-up read** (`GET` after create, update and delete; after a rejected write, check the data did not change).
 - **Auth:** ask for the `adminToken` or `customerToken` fixture; use `login(request, credentials)` for a user created in the test. Tests about auth itself (missing token, wrong role) call the API without the fixture token.
@@ -46,7 +48,7 @@ Rules marked **(checked)** are enforced for everyone by ESLint and CI, and for C
 
 - No `waitForTimeout` or other fixed waits **(checked)**.
 - No hardcoded ids such as `/brands/1` **(checked)**.
-- No negative login tests with the seed accounts: repeated failed logins lock the account (423) and break every test that uses the auth fixtures. Register a fresh user instead.
+- No negative login tests with the seed accounts: three failed logins lock a customer account (423) and break every test that uses `customerToken` (admins are never locked, so lockout tests also need a customer). Register a fresh user instead.
 - No changing an expected status code or schema just to make a test pass against behaviour the contract does not allow.
 - No `test.only` **(checked)**, no tags on `describe`, no `any`.
 - No secrets in code, logs or commits. `.env` is never committed; print variable names only, never values.
@@ -63,12 +65,12 @@ The user is preparing for a QA automation interview and writes the first tests o
 
 ## Skills index
 
-Skills will live in `.claude/skills/`. Planned (see `docs/orchestra.md`):
+Skills are in `.claude/skills/<name>/SKILL.md`. Claude Code loads them when a task matches; other tools can read the files.
 
-| Skill           | Purpose                                                          | Phase |
-| --------------- | ---------------------------------------------------------------- | ----- |
-| `api-testing`   | Contract-first test cases, status-code matrix, negative coverage | 2     |
-| `fixtures`      | Auth and data fixtures, when to add one                          | 2     |
-| `data-strategy` | Factories, invalid-value sets                                    | 2     |
-| `workflow`      | Plan, confidence, approval, verify with Redline, report          | 3     |
-| `pr-reviewer`   | Review a branch against this Constitution                        | 4     |
+| Skill           | Purpose                                                          | Status  |
+| --------------- | ---------------------------------------------------------------- | ------- |
+| `api-testing`   | Contract-first test cases, status-code matrix, negative coverage | Ready   |
+| `fixtures`      | Auth and data fixtures, when to add one                          | Ready   |
+| `data-strategy` | Factories, invalid-value sets                                    | Ready   |
+| `workflow`      | Plan, confidence, approval, verify with Redline, report          | Phase 3 |
+| `pr-reviewer`   | Review a branch against this Constitution                        | Phase 4 |

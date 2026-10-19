@@ -1,10 +1,12 @@
-import { test, expect } from "redline-playwright/fixture";
+import { test, expect } from "./fixtures";
 import { createBrandPayload, updateBrandPayload } from "./data/brand.data";
 import {
   BrandListResponseSchema,
   BrandNotFoundSchema,
   BrandResponseSchema,
   BrandErrorSchema,
+  BrandSuccessFoundSchema,
+  BrandConflictSchema,
 } from "./schemas/brand.schema";
 
 test.describe("POST /brands", () => {
@@ -154,7 +156,7 @@ test.describe("GET /brands", () => {
   test(
     "Get brand by non-existing id returns not found",
     { tag: "@TC-BRD-012" },
-    async ({ request }) => {
+    async ({ request, adminToken }) => {
       const payload = createBrandPayload();
 
       const id = await test.step("Create new brand id", async () => {
@@ -167,7 +169,9 @@ test.describe("GET /brands", () => {
       });
 
       await test.step("Delete brand id", async () => {
-        const response = await request.delete(`/brands/${id}`);
+        const response = await request.delete(`/brands/${id}`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        });
         expect(response.status()).toBe(204);
       });
 
@@ -214,14 +218,23 @@ test.describe("GET /brands", () => {
     "Get brand by id returns not modified when ETag matches",
     { tag: "@TC-BRD-014" },
     async ({ request }) => {
+      const id = await test.step("Create new brand id", async () => {
+        const payload = createBrandPayload();
+        const response = await request.post("/brands", {
+          data: payload,
+        });
+        expect(response.status()).toBe(201);
+        return BrandResponseSchema.parse(await response.json()).id;
+      });
+
       const etag = await test.step("Get brands", async () => {
-        const resp = await request.get("/brands/1");
+        const resp = await request.get(`/brands/${id}`);
         expect(resp.status()).toBe(200);
         return resp.headers()["etag"];
       });
 
       await test.step("Get all brands with ETag", async () => {
-        const resp = await request.get("/brands/1", {
+        const resp = await request.get(`/brands/${id}`, {
           headers: {
             "If-None-Match": `${etag}`,
           },
@@ -262,7 +275,7 @@ test.describe("PUT /brands", () => {
   test(
     "Update brand with non-existing id returns not found",
     { tag: "@TC-BRD-015" },
-    async ({ request }) => {
+    async ({ request, adminToken }) => {
       const id = await test.step("Create new brand id", async () => {
         const payload = createBrandPayload();
         const response = await request.post("/brands", {
@@ -273,7 +286,9 @@ test.describe("PUT /brands", () => {
       });
 
       await test.step("Delete brand id", async () => {
-        const response = await request.delete(`/brands/${id}`);
+        const response = await request.delete(`/brands/${id}`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        });
         expect(response.status()).toBe(204);
       });
 
@@ -290,17 +305,26 @@ test.describe("PUT /brands", () => {
     },
   );
 
-  test("Update brand fails when name is empty", { tag: "@TC-BRD-016" }, async ({ request }) => {
-    await test.step("Verify failed to update", async () => {
+  test("Update brand success when name is empty", { tag: "@TC-BRD-016" }, async ({ request }) => {
+    const id = await test.step("Create new brand id", async () => {
+      const payload = createBrandPayload();
+      const response = await request.post("/brands", {
+        data: payload,
+      });
+      expect(response.status()).toBe(201);
+      return BrandResponseSchema.parse(await response.json()).id;
+    });
+
+    await test.step("Verify successfully to update", async () => {
       const payload = updateBrandPayload();
       const { name, ...newPayload } = payload;
-      const response = await request.put(`/brands/1`, {
+      const response = await request.put(`/brands/${id}`, {
         data: newPayload,
       });
-      expect(response.status()).toBe(422);
+      expect(response.status()).toBe(200);
       const body = await response.json();
-      const data = BrandErrorSchema.parse(body);
-      expect(data.name).toContainEqual("The name field is required.");
+      const data = BrandSuccessFoundSchema.parse(body);
+      expect(data.success).toBe(true);
     });
   });
 
@@ -308,24 +332,29 @@ test.describe("PUT /brands", () => {
     "Update brand fails when slug is used by another brand",
     { tag: "@TC-BRD-017" },
     async ({ request }) => {
-      const slug = await test.step("Create new brand id", async () => {
-        const payload = createBrandPayload();
-        const response = await request.post("/brands", {
-          data: payload,
-        });
+      const createBrand = async () => {
+        const response = await request.post("/brands", { data: createBrandPayload() });
         expect(response.status()).toBe(201);
-        return BrandResponseSchema.parse(await response.json()).slug;
-      });
+        return BrandResponseSchema.parse(await response.json());
+      };
 
-      await test.step("Verify failed to update", async () => {
-        const payload = updateBrandPayload({ slug: slug });
-        const response = await request.put(`/brands/1`, {
-          data: payload,
+      const brandA = await test.step("Create brand A", createBrand);
+
+      const brandB = await test.step("Create brand B", createBrand);
+
+      await test.step("Verify failed to update brand B with the slug of brand A", async () => {
+        const response = await request.put(`/brands/${brandB.id}`, {
+          data: updateBrandPayload({ slug: brandA.slug }),
         });
         expect(response.status()).toBe(409);
-        const body = await response.json();
-        const data = BrandErrorSchema.parse(body);
-        expect(data.slug).toContainEqual("The slug has already been taken.");
+        const data = BrandConflictSchema.parse(await response.json());
+        expect(data).toEqual({ message: "Duplicate Entry" });
+      });
+
+      await test.step("Validate brand B is unchanged", async () => {
+        const response = await request.get(`/brands/${brandB.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual(brandB);
       });
     },
   );
@@ -348,7 +377,7 @@ test.describe("PUT /brands", () => {
 });
 
 test.describe("DELETE /brands", () => {
-  test("Delete brand id", { tag: "@TC-BRD-005" }, async ({ request }) => {
+  test("Delete brand id", { tag: "@TC-BRD-005" }, async ({ request, adminToken }) => {
     const id = await test.step("Create new brand id", async () => {
       const payload = createBrandPayload();
       const response = await request.post("/brands", {
@@ -359,7 +388,9 @@ test.describe("DELETE /brands", () => {
     });
 
     await test.step("Delete brand id", async () => {
-      const response = await request.delete(`/brands/${id}`);
+      const response = await request.delete(`/brands/${id}`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
       expect(response.status()).toBe(204);
     });
 
@@ -370,4 +401,48 @@ test.describe("DELETE /brands", () => {
       expect(BrandNotFoundSchema.parse(body).message).toBe("Requested item not found");
     });
   });
+
+  test("Delete brand fails without token", { tag: "@TC-BRD-019" }, async ({ request }) => {
+    const id = await test.step("Create new brand id", async () => {
+      const response = await request.post("/brands", { data: createBrandPayload() });
+      expect(response.status()).toBe(201);
+      return BrandResponseSchema.parse(await response.json()).id;
+    });
+
+    await test.step("Delete brand without token", async () => {
+      const response = await request.delete(`/brands/${id}`);
+      expect(response.status()).toBe(401);
+      expect(BrandNotFoundSchema.parse(await response.json()).message).toBe("Unauthorized");
+    });
+
+    await test.step("Validate brand still exists", async () => {
+      const response = await request.get(`/brands/${id}`);
+      expect(response.status()).toBe(200);
+    });
+  });
+
+  test(
+    "Delete brand fails when user is not admin",
+    { tag: "@TC-BRD-020" },
+    async ({ request, customerToken }) => {
+      const id = await test.step("Create new brand id", async () => {
+        const response = await request.post("/brands", { data: createBrandPayload() });
+        expect(response.status()).toBe(201);
+        return BrandResponseSchema.parse(await response.json()).id;
+      });
+
+      await test.step("Delete brand with customer token", async () => {
+        const response = await request.delete(`/brands/${id}`, {
+          headers: { Authorization: `Bearer ${customerToken}` },
+        });
+        expect(response.status()).toBe(403);
+        expect(BrandNotFoundSchema.parse(await response.json()).message).toBe("Forbidden");
+      });
+
+      await test.step("Validate brand still exists", async () => {
+        const response = await request.get(`/brands/${id}`);
+        expect(response.status()).toBe(200);
+      });
+    },
+  );
 });

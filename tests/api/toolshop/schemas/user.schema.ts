@@ -6,10 +6,11 @@ export const AddressSchema = z.strictObject({
   city: z.string(),
   state: z.string().nullable(),
   country: z.string(),
-  postal_code: z.string(),
+  postal_code: z.string().nullable(),
 });
 
-export const RegisterUserResponse = z.strictObject({
+// UserResponse di kontrak: respons register dan GET /users/me.
+export const UserResponseSchema = z.strictObject({
   first_name: z.string(),
   last_name: z.string(),
   address: AddressSchema,
@@ -18,7 +19,7 @@ export const RegisterUserResponse = z.strictObject({
   email: z.string(),
   id: z.string(),
   created_at: z.string(),
-  // Ada di kontrak (UserResponse), tapi tidak dikirim saat register.
+  // Ada di kontrak (UserResponse), tapi tidak selalu dikirim (register tidak mengirimnya, /users/me sebagian).
   provider: z.string().nullable().optional(),
   totp_enabled: z.boolean().optional(),
   enabled: z.boolean().optional(),

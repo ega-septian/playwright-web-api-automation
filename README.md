@@ -51,15 +51,16 @@ npm run format && npm run lint && npx tsc -p . && npm run check:ids
 
 ## Test coverage
 
-Sprint 5 · Brands (`brand.spec.ts`, 20 tests)
+Sprint 5 · Brands (`brand.spec.ts`, 22 tests) and users (`register.user.spec.ts`, 1 test).
 
-| Endpoint              | Covered                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `POST /brands`        | Create; missing name or slug (422); duplicate slug (409); name length 120/121; empty body |
-| `GET /brands`         | List matches schema; new ETag when the list changes                                       |
-| `GET /brands/{id}`    | Get by id; unknown id (404); 304 when the ETag matches                                    |
-| `PUT /brands/{id}`    | Update; unknown id (404); without name; slug of another brand (409); name length 121      |
-| `DELETE /brands/{id}` | Delete as admin, verified by a 404 afterwards; no token (401); customer token (403)       |
+| Endpoint                   | Covered                                                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `POST /brands`             | Create; name missing or empty, slug missing (422); duplicate slug (409); name length 120/121; empty body |
+| `GET /brands`              | List contains a new brand; new ETag when the list changes                                                |
+| `GET /brands/{brandId}`    | Get by id; deleted id (404); 304 when the ETag matches                                                   |
+| `PUT /brands/{brandId}`    | Update; deleted id (404); without name; its own slug; slug of another brand (409); name length 121       |
+| `DELETE /brands/{brandId}` | Delete as admin; no token (401); customer token (403)                                                    |
+| `POST /users/register`     | Register, then log in and read the user back with `GET /users/me`                                        |
 
 Full list with IDs: `npx playwright test --list`. Next: users and login, categories, products, cart and invoices.
 

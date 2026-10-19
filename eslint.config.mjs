@@ -20,9 +20,8 @@ export default tseslint.config(
     files: ["tests/**/*.spec.ts"],
     rules: {
       "playwright/no-wait-for-timeout": "error",
-      // Masih warning: register.user.spec.ts belum pindah ke ./fixtures.
       "no-restricted-imports": [
-        "warn",
+        "error",
         {
           paths: [
             {

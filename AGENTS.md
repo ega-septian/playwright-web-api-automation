@@ -43,7 +43,7 @@ Rules marked **(checked)** are enforced for everyone by ESLint and CI, and for C
 - Wrap each API call in `test.step` when a test makes more than one call.
 - Cover negative cases per field (each required field missing, wrong type, boundary length), not only an empty body.
 - Name tests after the behaviour: `"<Action> <resource> fails when <condition>"`, and make the title match what the test sends.
-- Comments in code are short and in Indonesian, like the existing code.
+- Comments in code are short and in English, and explain why, not what.
 
 ### WON'T
 

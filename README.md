@@ -51,16 +51,18 @@ npm run format && npm run lint && npx tsc -p . && npm run check:ids
 
 ## Test coverage
 
-Sprint 5 · Brands (`brand.spec.ts`, 22 tests) and users (`register.user.spec.ts`, 1 test).
+Sprint 5 · Brands (`brand.spec.ts`, 40 tests) and users (`register.user.spec.ts`, 1 test).
 
-| Endpoint                   | Covered                                                                                                  |
-| -------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `POST /brands`             | Create; name missing or empty, slug missing (422); duplicate slug (409); name length 120/121; empty body |
-| `GET /brands`              | List contains a new brand; new ETag when the list changes                                                |
-| `GET /brands/{brandId}`    | Get by id; deleted id (404); 304 when the ETag matches                                                   |
-| `PUT /brands/{brandId}`    | Update; deleted id (404); without name; its own slug; slug of another brand (409); name length 121       |
-| `DELETE /brands/{brandId}` | Delete as admin; no token (401); customer token (403)                                                    |
-| `POST /users/register`     | Register, then log in and read the user back with `GET /users/me`                                        |
+| Endpoint                   | Covered                                                                                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /brands`             | Create; name missing, empty, null or not a string; slug missing, empty, with spaces, 121 characters (422); duplicate slug (409); name and slug length 120; empty body |
+| `GET /brands`              | List contains a new brand; new ETag when the list changes                                                                                                             |
+| `GET /brands/{brandId}`    | Get by id; deleted id (404); 304 when the ETag matches                                                                                                                |
+| `GET /brands/search`       | Finds a brand by name; empty list when nothing matches                                                                                                                |
+| `PUT /brands/{brandId}`    | Update; deleted id (404); without name or slug; its own slug; slug of another brand (409); empty or non-string name, empty slug, name length 121 (422)                |
+| `PATCH /brands/{brandId}`  | Name only; slug of another brand (409); name length 121 (422); deleted id (404)                                                                                       |
+| `DELETE /brands/{brandId}` | Delete as admin; already deleted (404); used by a product (409); no token (401); customer token (403)                                                                 |
+| `POST /users/register`     | Register, then log in and read the user back with `GET /users/me`                                                                                                     |
 
 Full list with IDs: `npx playwright test --list`. Next: users and login, categories, products, cart and invoices.
 

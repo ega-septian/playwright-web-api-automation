@@ -9,7 +9,7 @@ export const AddressSchema = z.strictObject({
   postal_code: z.string().nullable(),
 });
 
-// UserResponse di kontrak: respons register dan GET /users/me.
+// UserResponse in the contract: the response of register and GET /users/me.
 export const UserResponseSchema = z.strictObject({
   first_name: z.string(),
   last_name: z.string(),
@@ -19,7 +19,7 @@ export const UserResponseSchema = z.strictObject({
   email: z.string(),
   id: z.string(),
   created_at: z.string(),
-  // Ada di kontrak (UserResponse), tapi tidak selalu dikirim (register tidak mengirimnya, /users/me sebagian).
+  // In the contract but not always sent: register leaves them out, /users/me sends some.
   provider: z.string().nullable().optional(),
   totp_enabled: z.boolean().optional(),
   enabled: z.boolean().optional(),

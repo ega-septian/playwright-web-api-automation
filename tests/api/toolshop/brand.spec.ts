@@ -1,15 +1,22 @@
 import { faker } from "@faker-js/faker";
 import { test, expect } from "./fixtures";
 import { createBrandPayload, updateBrandPayload } from "./data/brand.data";
-import { getAllBrands } from "./helper/brand.helper";
+import { createBrand, getAllBrands } from "./helper/brand.helper";
+import { createProductForBrand } from "./helper/product.helper";
 import {
   BrandListResponseSchema,
   BrandResponseSchema,
   BrandErrorSchema,
   BrandSuccessFoundSchema,
   BrandConflictSchema,
+  BrandInUseSchema,
 } from "./schemas/brand.schema";
 import { MessageResponseSchema } from "./schemas/error.schema";
+
+// Toolshop caches GET /brands and clears it on every write. A parallel read can put an old list
+// back into the cache, so a new brand is missing from GET /brands. Brand tests share that cache,
+// so they run in order in one worker.
+test.describe.configure({ mode: "default" });
 
 test.describe("POST /brands", () => {
   test("Create brand successfully", { tag: "@TC-BRD-002" }, async ({ request }) => {
@@ -63,7 +70,7 @@ test.describe("POST /brands", () => {
   });
 
   test("Create brand fails when slug is missing", { tag: "@TC-BRD-007" }, async ({ request }) => {
-    // Nama unik, supaya bisa dicek tidak tersimpan (tanpa slug).
+    // No slug to look for, so a unique name shows the brand was not stored.
     const { slug, ...payload } = createBrandPayload({ name: `No slug ${faker.string.uuid()}` });
 
     await test.step("Create brand without slug", async () => {
@@ -150,12 +157,132 @@ test.describe("POST /brands", () => {
     "Create brand fails with empty request body",
     { tag: "@TC-BRD-011" },
     async ({ request }) => {
-      // Tidak ada GET setelahnya: body kosong tidak punya nama atau slug untuk dicari di daftar.
+      // No follow-up GET: an empty body has no name or slug to look for.
       const response = await request.post("/brands", { data: {} });
       expect(response.status()).toBe(422);
       const data = BrandErrorSchema.parse(await response.json());
       expect(data.name).toContainEqual("The name field is required.");
       expect(data.slug).toContainEqual("The slug field is required.");
+    },
+  );
+
+  test(
+    "Create brand fails when name is not a string",
+    { tag: "@TC-BRD-023" },
+    async ({ request }) => {
+      const payload = { ...createBrandPayload(), name: 123 };
+
+      await test.step("Create brand with a number as name", async () => {
+        const response = await request.post("/brands", { data: payload });
+        expect(response.status()).toBe(422);
+        const data = BrandErrorSchema.parse(await response.json());
+        expect(data.name).toContainEqual("The name field must be a string.");
+      });
+
+      await test.step("Validate brand is not stored", async () => {
+        const brands = await getAllBrands(request);
+        expect(brands.filter((b) => b.slug === payload.slug)).toHaveLength(0);
+      });
+    },
+  );
+
+  test("Create brand fails when name is null", { tag: "@TC-BRD-024" }, async ({ request }) => {
+    const payload = { ...createBrandPayload(), name: null };
+
+    await test.step("Create brand with null as name", async () => {
+      const response = await request.post("/brands", { data: payload });
+      expect(response.status()).toBe(422);
+      const data = BrandErrorSchema.parse(await response.json());
+      expect(data.name).toContainEqual("The name field is required.");
+    });
+
+    await test.step("Validate brand is not stored", async () => {
+      const brands = await getAllBrands(request);
+      expect(brands.filter((b) => b.slug === payload.slug)).toHaveLength(0);
+    });
+  });
+
+  test(
+    "Create brand fails when slug contains spaces",
+    { tag: "@TC-BRD-025" },
+    async ({ request }) => {
+      const payload = createBrandPayload({ slug: "has space" });
+
+      await test.step("Create brand with an invalid slug", async () => {
+        const response = await request.post("/brands", { data: payload });
+        expect(response.status()).toBe(422);
+        const data = BrandErrorSchema.parse(await response.json());
+        expect(data.slug).toContainEqual(
+          "The slug field must only contain letters, numbers, dashes, and underscores.",
+        );
+      });
+
+      await test.step("Validate brand is not stored", async () => {
+        const brands = await getAllBrands(request);
+        expect(
+          brands.filter((b) => b.name === payload.name && b.slug === payload.slug),
+        ).toHaveLength(0);
+      });
+    },
+  );
+
+  test("Create brand fails when slug is empty", { tag: "@TC-BRD-026" }, async ({ request }) => {
+    // The slug is empty, so a unique name shows the brand was not stored.
+    const payload = createBrandPayload({ name: `Empty slug ${faker.string.uuid()}`, slug: "" });
+
+    await test.step("Create brand with an empty slug", async () => {
+      const response = await request.post("/brands", { data: payload });
+      expect(response.status()).toBe(422);
+      const data = BrandErrorSchema.parse(await response.json());
+      expect(data.slug).toContainEqual("The slug field is required.");
+    });
+
+    await test.step("Validate brand is not stored", async () => {
+      const brands = await getAllBrands(request);
+      expect(brands.filter((b) => b.name === payload.name)).toHaveLength(0);
+    });
+  });
+
+  test(
+    "Create brand fails when slug exceeds 120 characters",
+    { tag: "@TC-BRD-027" },
+    async ({ request }) => {
+      const payload = createBrandPayload({ slug: "a".repeat(121) });
+
+      await test.step("Create brand with a 121-character slug", async () => {
+        const response = await request.post("/brands", { data: payload });
+        expect(response.status()).toBe(422);
+        const data = BrandErrorSchema.parse(await response.json());
+        expect(data.slug).toContainEqual("The slug field must not be greater than 120 characters.");
+      });
+
+      await test.step("Validate brand is not stored", async () => {
+        const brands = await getAllBrands(request);
+        expect(brands.filter((b) => b.slug === payload.slug)).toHaveLength(0);
+      });
+    },
+  );
+
+  test(
+    "Create brand succeeds when slug is exactly 120 characters",
+    { tag: "@TC-BRD-028" },
+    async ({ request }) => {
+      // 120 characters is the maximum slug length. Random letters keep it unique.
+      const slug = faker.string.alphanumeric({ length: 120, casing: "lower" });
+
+      const brand = await test.step("Create brand with a 120-character slug", async () => {
+        const response = await request.post("/brands", { data: createBrandPayload({ slug }) });
+        expect(response.status()).toBe(201);
+        const brand = BrandResponseSchema.parse(await response.json());
+        expect(brand.slug).toBe(slug);
+        return brand;
+      });
+
+      await test.step("Validate brand is stored", async () => {
+        const response = await request.get(`/brands/${brand.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual(brand);
+      });
     },
   );
 });
@@ -176,8 +303,8 @@ test.describe("GET /brands", () => {
     });
   });
 
-  // Daftar brand berubah terus karena test lain membuat brand secara paralel, jadi 304 untuk /brands tidak
-  // bisa diandalkan. Yang diuji: ETag ikut berubah ketika daftar berubah. Kasus 304 diuji di TC-BRD-014.
+  // A 304 for /brands is not reliable: the list can change between two calls on a shared server.
+  // This test checks that the ETag changes with the list. TC-BRD-014 covers the 304 case.
   test(
     "Get all brands returns a new ETag when the list changes",
     { tag: "@TC-BRD-013" },
@@ -271,7 +398,7 @@ test.describe("GET /brands/{brandId}", () => {
 
       await test.step("Get brand by id with the same ETag", async () => {
         const resp = await request.get(`/brands/${id}`, { headers: { "If-None-Match": etag } });
-        // 304 tidak ada di kontrak (GET /brands/{brandId} hanya 200, 404, 405).
+        // The API answers 304, but the contract only lists 200, 404 and 405.
         expect(resp.status()).toBe(304);
       });
     },
@@ -343,7 +470,7 @@ test.describe("PUT /brands/{brandId}", () => {
         return BrandResponseSchema.parse(await response.json());
       });
 
-      // BrandRequest di kontrak tidak mewajibkan field apa pun, jadi PUT tanpa name boleh.
+      // BrandRequest in the contract has no required fields, so a PUT without name succeeds.
       const { name, ...payload } = updateBrandPayload();
 
       await test.step("Update brand without name", async () => {
@@ -433,7 +560,7 @@ test.describe("PUT /brands/{brandId}", () => {
         return BrandResponseSchema.parse(await response.json());
       });
 
-      // Nama diganti supaya GET membuktikan update benar-benar tersimpan
+      // Same slug, new name: the GET at the end proves the update was stored.
       const payload = updateBrandPayload({ slug: brand.slug });
 
       await test.step("Update brand with its own slug", async () => {
@@ -452,6 +579,221 @@ test.describe("PUT /brands/{brandId}", () => {
           slug: brand.slug,
         });
       });
+    },
+  );
+
+  test("Update brand fails when name is empty", { tag: "@TC-BRD-029" }, async ({ request }) => {
+    // Laravel turns "" into null before validation, so the message is "must be a string".
+    const brand = await test.step("Create new brand", async () => createBrand(request));
+
+    await test.step("Verify failed to update with an empty name", async () => {
+      const response = await request.put(`/brands/${brand.id}`, {
+        data: updateBrandPayload({ name: "" }),
+      });
+      expect(response.status()).toBe(422);
+      const data = BrandErrorSchema.parse(await response.json());
+      expect(data.name).toContainEqual("The name field must be a string.");
+    });
+
+    await test.step("Validate brand is unchanged", async () => {
+      const response = await request.get(`/brands/${brand.id}`);
+      expect(response.status()).toBe(200);
+      expect(BrandResponseSchema.parse(await response.json())).toEqual(brand);
+    });
+  });
+
+  test("Update brand fails when slug is empty", { tag: "@TC-BRD-030" }, async ({ request }) => {
+    // Laravel turns "" into null before validation, so the message comes from the alpha_dash rule.
+    const brand = await test.step("Create new brand", async () => createBrand(request));
+
+    await test.step("Verify failed to update with an empty slug", async () => {
+      const response = await request.put(`/brands/${brand.id}`, {
+        data: updateBrandPayload({ slug: "" }),
+      });
+      expect(response.status()).toBe(422);
+      const data = BrandErrorSchema.parse(await response.json());
+      expect(data.slug).toContainEqual(
+        "The slug field must only contain letters, numbers, dashes, and underscores.",
+      );
+    });
+
+    await test.step("Validate brand is unchanged", async () => {
+      const response = await request.get(`/brands/${brand.id}`);
+      expect(response.status()).toBe(200);
+      expect(BrandResponseSchema.parse(await response.json())).toEqual(brand);
+    });
+  });
+
+  test(
+    "Update brand fails when name is not a string",
+    { tag: "@TC-BRD-031" },
+    async ({ request }) => {
+      const brand = await test.step("Create new brand", async () => createBrand(request));
+
+      await test.step("Verify failed to update with a number as name", async () => {
+        const response = await request.put(`/brands/${brand.id}`, {
+          data: { ...updateBrandPayload(), name: 123 },
+        });
+        expect(response.status()).toBe(422);
+        const data = BrandErrorSchema.parse(await response.json());
+        expect(data.name).toContainEqual("The name field must be a string.");
+      });
+
+      await test.step("Validate brand is unchanged", async () => {
+        const response = await request.get(`/brands/${brand.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual(brand);
+      });
+    },
+  );
+
+  test(
+    "Update brand succeeds when slug is missing",
+    { tag: "@TC-BRD-032" },
+    async ({ request }) => {
+      const brand = await test.step("Create new brand", async () => createBrand(request));
+
+      // Like TC-BRD-016 (no name): the contract has no required fields.
+      const { slug, ...payload } = updateBrandPayload();
+
+      await test.step("Update brand without slug", async () => {
+        const response = await request.put(`/brands/${brand.id}`, { data: payload });
+        expect(response.status()).toBe(200);
+        const data = BrandSuccessFoundSchema.parse(await response.json());
+        expect(data.success).toBe(true);
+      });
+
+      await test.step("Validate name is updated and slug is kept", async () => {
+        const response = await request.get(`/brands/${brand.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual({
+          id: brand.id,
+          name: payload.name,
+          slug: brand.slug,
+        });
+      });
+    },
+  );
+});
+
+test.describe("PATCH /brands/{brandId}", () => {
+  test("Patch brand name only", { tag: "@TC-BRD-033" }, async ({ request }) => {
+    const brand = await test.step("Create new brand", async () => createBrand(request));
+
+    const name = createBrandPayload().name;
+
+    await test.step("Patch the name", async () => {
+      const response = await request.patch(`/brands/${brand.id}`, { data: { name } });
+      expect(response.status()).toBe(200);
+      const data = BrandSuccessFoundSchema.parse(await response.json());
+      expect(data.success).toBe(true);
+    });
+
+    await test.step("Validate name is updated and slug is kept", async () => {
+      const response = await request.get(`/brands/${brand.id}`);
+      expect(response.status()).toBe(200);
+      expect(BrandResponseSchema.parse(await response.json())).toEqual({ ...brand, name });
+    });
+  });
+
+  test(
+    "Patch brand fails when slug is used by another brand",
+    { tag: "@TC-BRD-034" },
+    async ({ request }) => {
+      const brandA = await test.step("Create brand A", async () => createBrand(request));
+
+      const brandB = await test.step("Create brand B", async () => createBrand(request));
+
+      await test.step("Verify failed to patch brand B with the slug of brand A", async () => {
+        const response = await request.patch(`/brands/${brandB.id}`, {
+          data: { slug: brandA.slug },
+        });
+        expect(response.status()).toBe(409);
+        const data = BrandConflictSchema.parse(await response.json());
+        expect(data).toEqual({ slug: ["A brand already exists with this slug."] });
+      });
+
+      await test.step("Validate brand B is unchanged", async () => {
+        const response = await request.get(`/brands/${brandB.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual(brandB);
+      });
+    },
+  );
+
+  test(
+    "Patch brand fails when name exceeds 120 characters",
+    { tag: "@TC-BRD-035" },
+    async ({ request }) => {
+      const brand = await test.step("Create new brand", async () => createBrand(request));
+
+      await test.step("Verify failed to patch with a 121-character name", async () => {
+        const response = await request.patch(`/brands/${brand.id}`, {
+          data: { name: "a".repeat(121) },
+        });
+        expect(response.status()).toBe(422);
+        const data = BrandErrorSchema.parse(await response.json());
+        expect(data.name).toContainEqual("The name field must not be greater than 120 characters.");
+      });
+
+      await test.step("Validate brand is unchanged", async () => {
+        const response = await request.get(`/brands/${brand.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual(brand);
+      });
+    },
+  );
+
+  test(
+    "Patch brand with non-existing id returns not found",
+    { tag: "@TC-BRD-036" },
+    async ({ request, adminToken }) => {
+      const brand = await test.step("Create new brand", async () => createBrand(request));
+
+      await test.step("Delete brand id", async () => {
+        const response = await request.delete(`/brands/${brand.id}`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        });
+        expect(response.status()).toBe(204);
+      });
+
+      await test.step("Verify failed to patch", async () => {
+        const response = await request.patch(`/brands/${brand.id}`, {
+          data: { name: createBrandPayload().name },
+        });
+        expect(response.status()).toBe(404);
+        const data = MessageResponseSchema.parse(await response.json());
+        expect(data.message).toBe("Requested item not found");
+      });
+    },
+  );
+});
+
+test.describe("GET /brands/search", () => {
+  // Search uses MySQL full-text BOOLEAN MODE, where "-" means "exclude this word", and caches each
+  // query for an hour. So queries are unique words without "-", and the brand is created first.
+  const uniqueWord = () => faker.string.uuid().replaceAll("-", "");
+
+  test("Search brands finds a brand by name", { tag: "@TC-BRD-037" }, async ({ request }) => {
+    const brand = await test.step("Create brand with a unique name", async () =>
+      createBrand(request, { name: `Search brand ${uniqueWord()}` }));
+
+    await test.step("Search by the brand name", async () => {
+      const response = await request.get("/brands/search", { params: { q: brand.name } });
+      expect(response.status()).toBe(200);
+      const brands = BrandListResponseSchema.parse(await response.json());
+      // "Search" and "brand" also match other brands, so only check this brand is in the result.
+      expect(brands).toContainEqual(brand);
+    });
+  });
+
+  test(
+    "Search brands returns an empty list when nothing matches",
+    { tag: "@TC-BRD-038" },
+    async ({ request }) => {
+      const response = await request.get("/brands/search", { params: { q: uniqueWord() } });
+      expect(response.status()).toBe(200);
+      expect(BrandListResponseSchema.parse(await response.json())).toEqual([]);
     },
   );
 });
@@ -513,9 +855,60 @@ test.describe("DELETE /brands/{brandId}", () => {
         const response = await request.delete(`/brands/${brand.id}`, {
           headers: { Authorization: `Bearer ${customerToken}` },
         });
-        // 403 tidak ada di kontrak (DELETE /brands/{brandId} hanya 204, 401, 404, 405, 409, 422).
+        // The API answers 403, but the contract only lists 204, 401, 404, 405, 409 and 422.
         expect(response.status()).toBe(403);
         expect(MessageResponseSchema.parse(await response.json()).message).toBe("Forbidden");
+      });
+
+      await test.step("Validate brand is unchanged", async () => {
+        const response = await request.get(`/brands/${brand.id}`);
+        expect(response.status()).toBe(200);
+        expect(BrandResponseSchema.parse(await response.json())).toEqual(brand);
+      });
+    },
+  );
+
+  test(
+    "Delete brand that is already deleted returns not found",
+    { tag: "@TC-BRD-039" },
+    async ({ request, adminToken }) => {
+      const brand = await test.step("Create new brand", async () => createBrand(request));
+
+      const headers = { Authorization: `Bearer ${adminToken}` };
+
+      await test.step("Delete brand", async () => {
+        const response = await request.delete(`/brands/${brand.id}`, { headers });
+        expect(response.status()).toBe(204);
+      });
+
+      await test.step("Delete the same brand again", async () => {
+        const response = await request.delete(`/brands/${brand.id}`, { headers });
+        expect(response.status()).toBe(404);
+        const data = MessageResponseSchema.parse(await response.json());
+        expect(data.message).toBe("Requested item not found");
+      });
+    },
+  );
+
+  test(
+    "Delete brand fails when a product uses it",
+    { tag: "@TC-BRD-040" },
+    async ({ request, adminToken }) => {
+      const brand = await test.step("Create new brand", async () => createBrand(request));
+
+      await test.step("Create a product with the brand", async () =>
+        createProductForBrand(request, brand.id));
+
+      await test.step("Verify failed to delete", async () => {
+        const response = await request.delete(`/brands/${brand.id}`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        });
+        expect(response.status()).toBe(409);
+        const data = BrandInUseSchema.parse(await response.json());
+        expect(data).toEqual({
+          success: false,
+          message: "Seems like this brand is used elsewhere.",
+        });
       });
 
       await test.step("Validate brand is unchanged", async () => {

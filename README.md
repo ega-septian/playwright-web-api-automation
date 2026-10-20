@@ -10,21 +10,23 @@ API test automation for the Toolshop e-commerce API ([Practice Software Testing]
 - **Three-layer assertions** on every response: status code, Zod contract, data
 - **Positive, negative and boundary tests**, each with a `@TC-` test case ID
 - **Every failure explained** by Redline: backend bug, test bug, environment or flaky
-- **CI on every pull request**: the API tests run against Toolshop in Docker, plus types, lint, format and test case IDs
+- **CI on every pull request**: the API tests run against the live Toolshop demo (or Toolshop in Docker, on demand), plus types, lint, format and test case IDs
 - **Public Allure report** from `main`, updated on every merge
 
 ## Quick start
 
-Requires Node.js 22.6+ and [Practice Software Testing](https://github.com/testsmith-io/practice-software-testing) sprint 5 running locally with Docker (API at `http://localhost:8091`, `SPRINT=sprint5`, database created with `docker exec pst-laravel-api-1 php artisan migrate:fresh --seed`).
+Requires Node.js 22.6+. The tests run against the public Toolshop demo API (`https://api.practicesoftwaretesting.com`) by default, so nothing else needs to be running.
 
-Tests that need a login read these from `.env`. They are the demo accounts from Toolshop's seed data:
+Tests that need an admin read it from `.env`. It is the demo admin from Toolshop's seed data; customers are registered by the tests:
 
 ```bash
 TOOLSHOP_ADMIN_EMAIL=admin@practicesoftwaretesting.com
 TOOLSHOP_ADMIN_PASSWORD=welcome01
-TOOLSHOP_CUSTOMER_EMAIL=customer@practicesoftwaretesting.com
-TOOLSHOP_CUSTOMER_PASSWORD=welcome01
 ```
+
+The live demo is shared with everyone who practises on it. Brands the tests create are deleted afterwards, and a test that would change the server for other people (TC-BRD-040 creates a product, which clears the whole server cache) runs only against Docker.
+
+To run against your own Toolshop instead, start [Practice Software Testing](https://github.com/testsmith-io/practice-software-testing) sprint 5 with Docker (API at `http://localhost:8091`, `SPRINT=sprint5`, database created with `docker exec pst-laravel-api-1 php artisan migrate:fresh --seed`) and set `TOOLSHOP_TARGET=local` in `.env`. Use Docker to debug a backend failure: it has server logs and a database you can reset.
 
 ```bash
 npm install
@@ -51,13 +53,13 @@ npm run format && npm run lint && npx tsc -p . && npm run check:ids
 
 ## Test coverage
 
-Sprint 5 · Brands (`brand.spec.ts`, 40 tests) and users (`register.user.spec.ts`, 1 test).
+Sprint 5 · Brands (`brand.spec.ts`, 39 tests) and users (`register.user.spec.ts`, 1 test).
 
 | Endpoint                   | Covered                                                                                                                                                               |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /brands`             | Create; name missing, empty, null or not a string; slug missing, empty, with spaces, 121 characters (422); duplicate slug (409); name and slug length 120; empty body |
 | `GET /brands`              | List contains a new brand; new ETag when the list changes                                                                                                             |
-| `GET /brands/{brandId}`    | Get by id; deleted id (404); 304 when the ETag matches                                                                                                                |
+| `GET /brands/{brandId}`    | Get by id; deleted id (404)                                                                                                                                           |
 | `GET /brands/search`       | Finds a brand by name; empty list when nothing matches                                                                                                                |
 | `PUT /brands/{brandId}`    | Update; deleted id (404); without name or slug; its own slug; slug of another brand (409); empty or non-string name, empty slug, name length 121 (422)                |
 | `PATCH /brands/{brandId}`  | Name only; slug of another brand (409); name length 121 (422); deleted id (404)                                                                                       |
@@ -181,7 +183,7 @@ AI assistants follow the rulebook in [`AGENTS.md`](AGENTS.md) (Claude Code reads
 | Test case IDs  | Tests without a `@TC-` tag, or a duplicate ID  |
 | Security audit | Vulnerable dependencies (warning only)         |
 
-`.github/workflows/playwright.yml` runs the API tests on every pull request and push to `main`: it starts Toolshop (sprint 5, API and database only) with Docker on the runner, seeds the database, then runs `npx playwright test`.
+`.github/workflows/playwright.yml` runs the API tests on every pull request and push to `main`, against the live Toolshop demo. Run it by hand (Actions → Playwright Tests → Run workflow) with target `local` to start Toolshop (sprint 5, API and database only) with Docker on the runner, seed the database and test against that instead.
 
 Redline runs in the same job (DozerDB as a service, Redline pinned to a release), so a failure in CI is explained in the job summary and in the Allure report. CI has no AI key: causes come from Redline's rules only, at no cost, and the database is new on every run, so there is no history of earlier runs to compare with.
 

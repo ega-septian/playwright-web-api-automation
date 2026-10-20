@@ -20,7 +20,7 @@
 
 ## How to test
 
-<!-- Commands a reviewer can run. Mention what needs to be running (e.g. Toolshop at localhost:8091, Redline at localhost:8787). -->
+<!-- Commands a reviewer can run. Mention what needs to be running (e.g. TOOLSHOP_TARGET=local for Toolshop in Docker, Redline at localhost:8787). -->
 
 1.
 

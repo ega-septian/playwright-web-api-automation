@@ -81,4 +81,10 @@ Report the matrix with a result per row: pass, skipped with FIXME, or not testab
 - **Three failed logins lock a customer account** (423); admins are never locked or counted. Never use the seed accounts for negative login tests: register a fresh customer, also for lockout tests.
 - **JWT tokens live 5 minutes.** Don't store tokens in files.
 - **Ids are ULID strings** (`01m51z…`), not numbers.
+- **`/brands/search` uses MySQL full-text in BOOLEAN MODE**, and caches each query for an hour.
+  - `-` means "exclude this word", so a hyphenated UUID can hide the brand it names. Search with a unique word without `-`.
+  - Any one word matches, so assert `toContainEqual`, never an exact list.
+  - Create the data before the first search with that query; a query searched earlier keeps its old result.
+- **Creating a product flushes Toolshop's whole cache.** Several product creates running in parallel can return 500. Keep product-creating setup to one test (`helper/product.helper.ts`), or run those tests serially.
+- **`GET /brands` is cached and the cache can go stale under parallel tests.** A read that misses the cache can store a list read before another test's insert, so a brand just created is missing. `brand.spec.ts` runs in one worker (`test.describe.configure({ mode: "default" })`); keep it that way, and use the same for any new spec that asserts a new item appears in a cached list.
 - **The local database keeps test data between runs.** Make unique values (email, slug) with Faker, and don't assert on list lengths.

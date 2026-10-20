@@ -5,6 +5,7 @@ import {
   type PlaywrightWorkerArgs,
   type WorkerFixture,
 } from "@playwright/test";
+import { createUserPayload } from "../data/user.data";
 import { LoginResponseSchema } from "../schemas/user.schema";
 
 export type Credentials = { email: string; password: string };
@@ -38,12 +39,29 @@ function tokenFor(
   ];
 }
 
-type AuthFixtures = {
+/**
+ * A customer registered for this worker. The seed customer is shared by everyone on the live server,
+ * and three failed logins by anyone lock it (423).
+ */
+const freshCustomerToken: [WorkerFixture<string, PlaywrightWorkerArgs>, { scope: "worker" }] = [
+  async ({ playwright }, use, workerInfo) => {
+    const api = await playwright.request.newContext({ baseURL: workerInfo.project.use.baseURL });
+    const user = createUserPayload();
+    const response = await api.post("/users/register", { data: user });
+    expect(response.status(), `register ${user.email} failed`).toBe(201);
+    const token = await login(api, user);
+    await api.dispose();
+    await use(token);
+  },
+  { scope: "worker" },
+];
+
+export type AuthFixtures = {
   adminToken: string;
   customerToken: string;
 };
 
 export const test = base.extend<object, AuthFixtures>({
   adminToken: tokenFor("TOOLSHOP_ADMIN"),
-  customerToken: tokenFor("TOOLSHOP_CUSTOMER"),
+  customerToken: freshCustomerToken,
 });

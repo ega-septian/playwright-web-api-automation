@@ -20,6 +20,8 @@ export default tseslint.config(
     files: ["tests/**/*.spec.ts"],
     rules: {
       "playwright/no-wait-for-timeout": "error",
+      // test.skip(condition, reason) is allowed, e.g. a test that must not run on the live server.
+      "playwright/no-skipped-test": ["warn", { allowConditional: true }],
       "no-restricted-imports": [
         "error",
         {

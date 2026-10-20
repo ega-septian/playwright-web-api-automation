@@ -1,6 +1,7 @@
 name: Playwright Tests
-# Menjalankan Toolshop (Practice Software Testing) dengan Docker di runner, lalu test API terhadapnya.
-# Pola ini mengikuti workflow resmi Toolshop (.github/workflows/run-tests.yml di repo mereka).
+# API tests against the live Toolshop demo (api.practicesoftwaretesting.com) by default. Run the workflow
+# by hand with target "local" to start Toolshop (Practice Software Testing) in Docker on the runner instead,
+# like Toolshop's own workflow (.github/workflows/run-tests.yml in their repo).
 # Redline (dengan DozerDB) ikut berjalan di runner untuk menjelaskan kegagalan dengan aturan, tanpa AI. Laporan
 # Allure dari main diterbitkan ke GitHub Pages; riwayat trennya dibawa dari laporan sebelumnya.
 on:
@@ -9,12 +10,19 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      target:
+        description: Toolshop to test against
+        type: choice
+        options: [live, local]
+        default: live
 
 concurrency:
   group: playwright-${{ github.ref }}
   cancel-in-progress: true
 
 env:
+  TOOLSHOP_TARGET: ${{ inputs.target || 'live' }}
   # Toolshop dikunci ke commit yang sama dengan yang dipakai lokal, supaya hasilnya bisa diulang.
   TOOLSHOP_REF: 5a6ccc2668405c96de9e205beb441f34be8d9ecc
   SPRINT: sprint5
@@ -48,6 +56,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Checkout Toolshop
+        if: env.TOOLSHOP_TARGET == 'local'
         uses: actions/checkout@v4
         with:
           repository: testsmith-io/practice-software-testing
@@ -55,20 +64,24 @@ jobs:
           path: toolshop
 
       - name: Make Laravel storage writable
+        if: env.TOOLSHOP_TARGET == 'local'
         # Sprint 5 menyimpan cache di file (storage/framework/cache). PHP di container berjalan sebagai uid 1000,
         # folder hasil checkout milik user runner, jadi tanpa ini GET dan DELETE membalas 500.
         run: chmod -R a+rwX toolshop/$SPRINT/API/storage toolshop/$SPRINT/API/bootstrap/cache
 
       - name: Start Toolshop (API, web server, database)
+        if: env.TOOLSHOP_TARGET == 'local'
         working-directory: toolshop
         # UI Angular tidak dijalankan: test di project ini hanya memanggil API.
         run: docker compose -f docker-compose.yml up -d --build laravel-api web mariadb
 
       - name: Install API dependencies
+        if: env.TOOLSHOP_TARGET == 'local'
         working-directory: toolshop
         run: docker compose exec -T -u root laravel-api composer install --no-dev --optimize-autoloader --ignore-platform-req=ext-ffi
 
       - name: Wait for the database
+        if: env.TOOLSHOP_TARGET == 'local'
         working-directory: toolshop
         run: |
           for i in $(seq 1 30); do
@@ -78,10 +91,12 @@ jobs:
           echo "MariaDB tidak siap dalam 60 detik"; exit 1
 
       - name: Create and seed the database
+        if: env.TOOLSHOP_TARGET == 'local'
         working-directory: toolshop
         run: docker compose exec -T laravel-api php artisan migrate:refresh --seed
 
       - name: Wait for the API
+        if: env.TOOLSHOP_TARGET == 'local'
         run: |
           for i in $(seq 1 30); do
             curl -sf http://localhost:8091/status && exit 0
@@ -134,11 +149,10 @@ jobs:
         env:
           # REDLINE_AI=1 meminta analisis; tanpa API key di server, yang dipakai hanya aturan.
           REDLINE_AI: "1"
-          # Akun dari data seed Toolshop (UserSeeder), sama untuk semua orang: bukan rahasia, jadi tidak perlu secret.
+          # Toolshop's seed admin, the same for everyone (live and Docker): not a secret. Customers are
+          # registered by the tests.
           TOOLSHOP_ADMIN_EMAIL: admin@practicesoftwaretesting.com
           TOOLSHOP_ADMIN_PASSWORD: welcome01
-          TOOLSHOP_CUSTOMER_EMAIL: customer@practicesoftwaretesting.com
-          TOOLSHOP_CUSTOMER_PASSWORD: welcome01
 
       - name: Build Allure report
         if: ${{ !cancelled() }}
@@ -148,11 +162,13 @@ jobs:
           cp test-results/allure-history.jsonl test-results/allure-report/history.jsonl
 
       - name: Toolshop logs (on failure)
-        if: failure()
+        if: failure() && env.TOOLSHOP_TARGET == 'local'
         working-directory: toolshop
-        run: |
-          docker compose logs --tail=200 laravel-api web mariadb
-          echo "--- Redline"; tail -100 ../redline/redline.log || true
+        run: docker compose logs --tail=200 laravel-api web mariadb
+
+      - name: Redline logs (on failure)
+        if: failure()
+        run: tail -100 redline/redline.log || true
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

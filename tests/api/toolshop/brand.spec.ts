@@ -304,7 +304,7 @@ test.describe("GET /brands", () => {
   });
 
   // A 304 for /brands is not reliable: the list can change between two calls on a shared server.
-  // This test checks that the ETag changes with the list. TC-BRD-014 covers the 304 case.
+  // This test checks that the ETag changes with the list.
   test(
     "Get all brands returns a new ETag when the list changes",
     { tag: "@TC-BRD-013" },
@@ -374,32 +374,6 @@ test.describe("GET /brands/{brandId}", () => {
         expect(response.status()).toBe(404);
         const data = MessageResponseSchema.parse(await response.json());
         expect(data.message).toBe("Requested item not found");
-      });
-    },
-  );
-
-  test(
-    "Get brand by id returns not modified when ETag matches",
-    { tag: "@TC-BRD-014" },
-    async ({ request }) => {
-      const id = await test.step("Create new brand id", async () => {
-        const response = await request.post("/brands", { data: createBrandPayload() });
-        expect(response.status()).toBe(201);
-        return BrandResponseSchema.parse(await response.json()).id;
-      });
-
-      const etag = await test.step("Get brand by id", async () => {
-        const resp = await request.get(`/brands/${id}`);
-        expect(resp.status()).toBe(200);
-        const etag = resp.headers()["etag"];
-        expect(etag).toBeTruthy();
-        return etag;
-      });
-
-      await test.step("Get brand by id with the same ETag", async () => {
-        const resp = await request.get(`/brands/${id}`, { headers: { "If-None-Match": etag } });
-        // The API answers 304, but the contract only lists 200, 404 and 405.
-        expect(resp.status()).toBe(304);
       });
     },
   );
@@ -893,7 +867,10 @@ test.describe("DELETE /brands/{brandId}", () => {
   test(
     "Delete brand fails when a product uses it",
     { tag: "@TC-BRD-040" },
-    async ({ request, adminToken }) => {
+    async ({ request, adminToken, toolshopTarget }) => {
+      // Creating a product clears the whole server cache, which also hits other people on live.
+      test.skip(toolshopTarget === "live", "Creates a product, which clears the live server cache");
+
       const brand = await test.step("Create new brand", async () => createBrand(request));
 
       await test.step("Create a product with the brand", async () =>

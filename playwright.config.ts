@@ -2,7 +2,12 @@ import { defineConfig, type ReporterDescription } from "@playwright/test";
 import dotenv from "dotenv";
 import { randomUUID } from "node:crypto";
 import path from "path";
+import type { TargetOptions } from "./tests/api/toolshop/fixtures/target.fixture";
+import { toolshop } from "./toolshop.target.mts";
 dotenv.config({ path: path.resolve(__dirname, ".env") });
+
+/* Live demo API by default; TOOLSHOP_TARGET=local for Docker (toolshop.target.mts). */
+const { target, url } = toolshop();
 
 /*
  * Satu token per `playwright test`: dipasang sebagai atribut launch ReportPortal (redline_run) dan dikirim
@@ -38,7 +43,7 @@ const reportPortal: ReporterDescription[] =
       ]
     : [];
 
-export default defineConfig({
+export default defineConfig<TargetOptions>({
   testDir: "./tests",
   /* Bukti per test (trace, error-context) dipisah dari laporan di test-results/. */
   outputDir: "test-results/artifacts",
@@ -77,7 +82,8 @@ export default defineConfig({
       name: "toolshop",
       testDir: "./tests/api/toolshop",
       use: {
-        baseURL: "http://localhost:8091/",
+        baseURL: `${url}/`,
+        toolshopTarget: target,
       },
     },
   ],

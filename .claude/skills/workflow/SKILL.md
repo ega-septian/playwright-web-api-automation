@@ -17,7 +17,7 @@ Skip the phases for a small, clear change: fixing a typo, renaming a variable, r
 | ------------------------------------------ | -------------------------------------- | ------------------------------------------ |
 | **New area** (a resource with no spec yet) | "tests for /users/login"               | `api-testing`, `data-strategy`, `fixtures` |
 | **More tests in an existing area**         | "add a test for PUT with its own slug" | `api-testing`, `data-strategy`             |
-| **A failing test**                         | "TC-BRD-014 fails"                     | `api-testing` (§5), Redline (below)        |
+| **A failing test**                         | "TC-BRD-013 fails"                     | `api-testing` (§5), Redline (below)        |
 | **Refactor** (no behaviour change)         | "move the login helper"                | the skill that owns the files              |
 | **Fixture, schema or tooling**             | "add a customer2 role"                 | `fixtures`, `api-testing` (§3), or none    |
 
@@ -89,13 +89,13 @@ The user runs `npm run test:ai TC-BRD-021` for the same thing plus the Allure re
 
 Read `test-results/redline-report.md`. For each incident it gives the category, the confidence, the evidence, the next step and a curl command to reproduce. Then act on the category:
 
-| Redline says                  | What to do                                                                                                                                                                                                              |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **BUG DI TEST** (test bug)    | Fix the test. Check the fix against the contract (`api-testing` §5), never by weakening the assertion.                                                                                                                  |
-| **BUG BACKEND** (backend bug) | Keep the expectation. If the contract does not allow what the API did, follow `api-testing` §5 (`test.skip` + `FIXME`), and ask first. Report it.                                                                       |
-| **ENVIRONMENT**               | Don't change the tests. Check that Toolshop is running (`curl localhost:8091/status`), that the database is sprint 5 (`migrate:fresh --seed`), and that the Redline server is on `:8787`. Tell the user what you found. |
-| **FLAKY**                     | Rerun it 3 times. Look for shared data (fixed emails or slugs, list counts) or ordering between tests.                                                                                                                  |
-| **BELUM JELAS** (unclear)     | Read the evidence and the curl output yourself. If it is still unclear, offer `npm run test:verify <ID>` to prove the cause (it costs AI money), or ask.                                                                |
+| Redline says                  | What to do                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **BUG DI TEST** (test bug)    | Fix the test. Check the fix against the contract (`api-testing` §5), never by weakening the assertion.                                                                                                                                                                                                                                                   |
+| **BUG BACKEND** (backend bug) | Keep the expectation. If the contract does not allow what the API did, follow `api-testing` §5 (`test.skip` + `FIXME`), and ask first. Report it.                                                                                                                                                                                                        |
+| **ENVIRONMENT**               | Don't change the tests. Check the target is reachable (live: `curl https://api.practicesoftwaretesting.com/status`; local: `curl localhost:8091/status` and a sprint 5 database, `migrate:fresh --seed`), and that the Redline server is on `:8787`. On live, other people change data too: rerun before blaming the test. Tell the user what you found. |
+| **FLAKY**                     | Rerun it 3 times. Look for shared data (fixed emails or slugs, list counts) or ordering between tests.                                                                                                                                                                                                                                                   |
+| **BELUM JELAS** (unclear)     | Read the evidence and the curl output yourself. If it is still unclear, offer `npm run test:verify <ID>` to prove the cause (it costs AI money), or ask.                                                                                                                                                                                                 |
 
 A test may be called done only when it passes, or when it is skipped with a `FIXME` that the user agreed to.
 

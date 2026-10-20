@@ -4,16 +4,19 @@ API test automation for **Toolshop** (Practice Software Testing, sprint 5) with 
 
 ## Context
 
-- **App under test:** Toolshop API at `http://localhost:8091`, running locally with Docker (`~/Developer/practice-software-testing`, `SPRINT=sprint5`). Reset the database with `docker exec pst-laravel-api-1 php artisan migrate:fresh --seed`.
-- **Source of truth:** the OpenAPI contract at `http://localhost:8091/docs`. Build schemas and expected status codes from it, not from what the API happens to return.
+- **App under test:** the Toolshop API, chosen with `TOOLSHOP_TARGET` (`toolshop.target.mts`):
+  - `live` (default): the public demo at `https://api.practicesoftwaretesting.com`, shared with everyone who practises on it. Don't use it to debug a backend bug: there are no server logs.
+  - `local`: Practice Software Testing sprint 5 in Docker at `http://localhost:8091` (`~/Developer/practice-software-testing`, `SPRINT=sprint5`). Reset the database with `docker exec pst-laravel-api-1 php artisan migrate:fresh --seed`.
+- **Source of truth:** the OpenAPI contract at `<target>/docs` (`npm run contract`; live and local serve the same 5.0.0 contract). Build schemas and expected status codes from it, not from what the API happens to return.
 - **Layout:** `tests/api/toolshop/` holds one spec per feature (`brand.spec.ts`), plus `schemas/` (Zod response schemas), `data/` (factories), `types/` (request payload types), `fixtures/` (auth tokens, merged with the Redline fixture) and `helper/`.
-- **Seed accounts** (`admin@` and `customer@practicesoftwaretesting.com`) are public demo data. Locally they come from `.env` (`TOOLSHOP_ADMIN_*`, `TOOLSHOP_CUSTOMER_*`), in CI from `playwright.yml`.
+- **Accounts:** the seed admin (`admin@practicesoftwaretesting.com`, public demo data) comes from `.env` (`TOOLSHOP_ADMIN_*`), in CI from `playwright.yml`. `customerToken` belongs to a customer registered for each worker, because anyone on live can lock the seed customer.
 
 ## Commands
 
 ```bash
 npm run contract -- POST /users/login         # the contract for one endpoint (or: npm run contract -- /users)
 npx playwright test --grep @TC-BRD-003        # one test while writing (set REDLINE=0 in .env)
+TOOLSHOP_TARGET=local npx playwright test     # against Toolshop in Docker instead of live
 npm run test:allure TC-BRD-001 TC-BRD-005     # run, then open the Allure report (also: a spec name, e.g. brand)
 npm run test:ai TC-BRD-003                    # same, with Redline's explanation of failures
 npm run format && npm run lint && npx tsc -p . && npm run check:ids   # before every commit
@@ -29,7 +32,8 @@ Rules marked **(checked)** are enforced for everyone by ESLint and CI, and for C
 - **Imports (checked):** specs import `test` and `expect` from `./fixtures`.
 - **Test case IDs (checked):** every test has exactly one `@TC-<AREA>-<NNN>` tag (e.g. `@TC-BRD-017`), unique and never reused. Don't change a test's ID and its title in the same PR. Don't rename the Playwright project `toolshop`. Redline uses both to keep a test's history.
 - **Structure:** one `test.describe` per endpoint (`"POST /brands"`), tags on tests only.
-- **Own data:** tests create the data they need with factories from `data/` (Faker, override only what matters). Never depend on seed data ids or on another test.
+- **Own data:** tests create the data they need with factories from `data/` (Faker, override only what matters). Never depend on seed data ids or on another test. Brands created with `POST /brands` are deleted after the test by the `cleanup` fixture.
+- **Shared server:** a test that changes state other people on live depend on (for example creating a product, which clears the whole server cache) starts with `test.skip(toolshopTarget === "live", "<reason>")`.
 - **Schemas (checked):** response schemas in `schemas/` use `z.strictObject`, so a field that is not in the contract fails the test. Fields the API returns are required; fields documented but not returned are optional.
 - **Assertions in order:** 1. status code, 2. contract (`Schema.parse(await response.json())` with a schema from `schemas/`), 3. the values that matter for the scenario.
 - **Writes are verified with a follow-up read** (`GET` after create, update and delete; after a rejected write, check the data did not change).
@@ -49,7 +53,7 @@ Rules marked **(checked)** are enforced for everyone by ESLint and CI, and for C
 
 - No `waitForTimeout` or other fixed waits **(checked)**.
 - No hardcoded ids such as `/brands/1` **(checked)**.
-- No negative login tests with the seed accounts: three failed logins lock a customer account (423) and break every test that uses `customerToken` (admins are never locked, so lockout tests also need a customer). Register a fresh user instead.
+- No negative login tests with the seed accounts: three failed logins lock a customer account (423), for everyone on live (admins are never locked, so lockout tests also need a customer). Register a fresh user instead.
 - No changing an expected status code or schema just to make a test pass against behaviour the contract does not allow.
 - No `test.only` **(checked)**, no tags on `describe`, no `any`.
 - No secrets in code, logs or commits. `.env` is never committed; print variable names only, never values.

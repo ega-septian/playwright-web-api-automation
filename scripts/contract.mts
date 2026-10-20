@@ -4,9 +4,11 @@
  *   npm run contract -- /users                    daftar endpoint yang path-nya mengandung /users
  *   npm run contract -- POST /users/register      request body, auth, dan semua response (status + bentuk)
  *
- * Kontrak diambil dari TOOLSHOP_OPENAPI_URL (default http://localhost:8091/docs). $ref di-resolve dan bentuknya
+ * Kontrak diambil dari <target>/docs (TOOLSHOP_TARGET, lihat toolshop.target.mts). $ref di-resolve dan bentuknya
  * ditulis ringkas: { field: type }, "?" = boleh tidak ada, "|null" = boleh null.
  */
+import { toolshop } from "../toolshop.target.mts";
+
 type Schema = {
   $ref?: string;
   type?: string | string[];
@@ -32,7 +34,12 @@ type Operation = {
   >;
 };
 
-const url = process.env.TOOLSHOP_OPENAPI_URL ?? "http://localhost:8091/docs";
+try {
+  process.loadEnvFile(".env");
+} catch {
+  // No .env: the default target (live).
+}
+const url = `${toolshop().url}/docs`;
 const doc = await fetch(url)
   .then((r) => r.json())
   .catch((e) => {

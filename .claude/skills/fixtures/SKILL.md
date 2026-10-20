@@ -7,12 +7,14 @@ description: Use, add or change Playwright fixtures in this repo — the admin a
 
 ## What exists
 
-- `tests/api/toolshop/fixtures/index.ts` merges every fixture with `mergeTests(redlineTest, authTest)`. Specs import `test` and `expect` from `./fixtures`, and only from there.
+- `tests/api/toolshop/fixtures/index.ts` merges every fixture with `mergeTests(redlineTest, authTest, targetTest).extend(cleanup)`. Specs import `test` and `expect` from `./fixtures`, and only from there.
 - `tests/api/toolshop/fixtures/auth.fixture.ts` provides:
-  - `adminToken` and `customerToken`: worker-scoped, so each worker logs in once and the token is reused;
+  - `adminToken` (the seed admin from `.env`) and `customerToken` (a customer registered for the worker): worker-scoped, so each worker logs in once and the token is reused;
   - `tokenFor(envPrefix)`: builds a token fixture from `<PREFIX>_EMAIL` and `<PREFIX>_PASSWORD`;
   - `login(api, credentials)`: `POST /users/login`, checks for 200, validates the token schema and returns `access_token`;
   - `credentials(envPrefix)`: reads the env pair and fails with a clear message when it is missing.
+- `fixtures/target.fixture.ts`: `toolshopTarget` (`"live"` or `"local"`), set by `playwright.config.ts` from `TOOLSHOP_TARGET`.
+- `fixtures/cleanup.fixture.ts`: wraps `request` and deletes, with the admin token, every brand a test created with `POST /brands`. To clean up another collection, add its path to `CLEANED_UP`.
 
 ## Using them
 
@@ -50,6 +52,6 @@ Add one when the same setup or teardown repeats in 3 or more tests, or in more t
 
 ## Don't
 
-- Don't save tokens to a file: they expire after 5 minutes.
-- Don't use the seed accounts for negative login tests. Three failed logins lock a customer account (admins are exempt), and every test using `customerToken` then fails.
+- Don't save tokens to a file: they expire after 5 minutes. A worker that runs longer than that against live would need a fresh login.
+- Don't use the seed accounts for negative login tests. Three failed logins lock a customer account (admins are exempt), for everyone on live. Register a fresh user instead.
 - Don't build a fixture for one test.

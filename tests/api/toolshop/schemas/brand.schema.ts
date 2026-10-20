@@ -12,7 +12,7 @@ export const BrandSuccessFoundSchema = z.strictObject({
   success: z.boolean(),
 });
 
-// 422: error per field. Minimal satu field, supaya body kosong tidak lolos.
+// 422: error messages per field. At least one field, so an empty body does not pass.
 export const BrandErrorSchema = z
   .strictObject({
     name: z.array(z.string()).optional(),
@@ -20,9 +20,14 @@ export const BrandErrorSchema = z
   })
   .refine((body) => Object.keys(body).length > 0, "body 422 tanpa error per field");
 
-// 409 menurut kontrak sprint 5 (DuplicateConflictResponse): pesan umum dari database, atau error per field
-// dari validator.
+// 409 per the contract (DuplicateConflictResponse): a general database message or per-field errors.
 export const BrandConflictSchema = z.union([
   z.strictObject({ message: z.string() }),
   z.record(z.string(), z.array(z.string())),
 ]);
+
+// 409 when deleting a brand that a product still uses. The contract describes it but has no body.
+export const BrandInUseSchema = z.strictObject({
+  success: z.boolean(),
+  message: z.string(),
+});

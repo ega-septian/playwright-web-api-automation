@@ -32,7 +32,7 @@ Rules marked **(checked: <id>)** are enforced for everyone by ESLint and CI, and
 - **Imports (checked: imports):** specs import `test` and `expect` from `./fixtures`.
 - **Test case IDs (checked: test-ids):** every test has exactly one `@TC-<AREA>-<NNN>` tag (e.g. `@TC-BRD-017`), unique and never reused. Don't change a test's ID and its title in the same PR. Don't rename the Playwright project `toolshop`. Redline uses both to keep a test's history.
 - **Structure:** one `test.describe` per endpoint (`"POST /brands"`), tags on tests only.
-- **Own data:** tests create the data they need with factories from `data/` (Faker, override only what matters). Never depend on seed data ids or on another test. Brands created with `POST /brands` are deleted after the test by the `cleanup` fixture.
+- **Own data:** tests create the data they need with factories from `data/` (Faker, override only what matters). Never depend on seed data ids or on another test. Brands (`POST /brands`) and users (`POST /users/register`) a test creates are deleted after it by the `cleanup` fixture.
 - **Shared server:** a test that changes state other people on live depend on (for example creating a product, which clears the whole server cache) starts with `test.skip(toolshopTarget === "live", "<reason>")`.
 - **Schemas (checked: strict-schema):** response schemas in `schemas/` use `z.strictObject`, so a field that is not in the contract fails the test. Fields the API returns are required; fields documented but not returned are optional.
 - **Assertions in order:** 1. status code, 2. contract (`Schema.parse(await response.json())` with a schema from `schemas/`), 3. the values that matter for the scenario.

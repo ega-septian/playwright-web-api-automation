@@ -6,13 +6,16 @@ import type {
 } from "@playwright/test";
 import type { AuthFixtures } from "./auth.fixture";
 
-/** Collections whose new items are deleted after each test: `POST <path>` → `DELETE <path>/{id}`. */
-const CLEANED_UP = ["/brands"];
+/** Items deleted after each test: a 201 from `POST <create path>` → `DELETE <delete path>/{id}`. */
+const CLEANED_UP: Record<string, string> = {
+  "/brands": "/brands",
+  "/users/register": "/users",
+};
 
 /**
- * Wraps `request`: every item a test creates with `POST /brands` is deleted with the admin token when
- * the test ends, so the shared live server doesn't fill up with test data. Cleanup errors are ignored
- * (the test may have deleted the item itself, or a product may still use it).
+ * Wraps `request`: every brand and user a test creates is deleted with the admin token when the test
+ * ends, so the shared live server doesn't fill up with test data. Cleanup errors are ignored (the test
+ * may have deleted the item itself, or a product may still use it).
  */
 export const cleanup: Fixtures<
   object,
@@ -29,9 +32,9 @@ export const cleanup: Fixtures<
         return async (...args: Parameters<APIRequestContext["post"]>) => {
           const response = await target.post(...args);
           const path = typeof args[0] === "string" ? args[0] : "";
-          if (CLEANED_UP.includes(path) && response.status() === 201) {
+          if (path in CLEANED_UP && response.status() === 201) {
             const { id } = await response.json();
-            if (id) created.push(`${path}/${id}`);
+            if (id) created.push(`${CLEANED_UP[path]}/${id}`);
           }
           return response;
         };

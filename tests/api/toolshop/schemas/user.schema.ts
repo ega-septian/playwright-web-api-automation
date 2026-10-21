@@ -31,3 +31,13 @@ export const LoginResponseSchema = z.strictObject({
   token_type: z.string(),
   expires_in: z.number(),
 });
+
+// Login errors (401, 403, 423) are not in the contract; the API sends { error: "<reason>" }.
+export const LoginErrorSchema = z.strictObject({
+  error: z.string(),
+});
+
+// UpdateResponse in the contract: the body of PUT and PATCH /users/{userId}.
+export const UserUpdateResponseSchema = z.strictObject({
+  success: z.boolean(),
+});

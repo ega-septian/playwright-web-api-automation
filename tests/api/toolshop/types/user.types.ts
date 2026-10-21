@@ -16,3 +16,8 @@ export type Address = {
   country?: string;
   postal_code?: string;
 };
+
+export type LoginRequest = {
+  email: string;
+  password: string;
+};

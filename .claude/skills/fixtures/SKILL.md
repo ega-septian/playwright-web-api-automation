@@ -14,7 +14,7 @@ description: Use, add or change Playwright fixtures in this repo — the admin a
   - `login(api, credentials)`: `POST /users/login`, checks for 200, validates the token schema and returns `access_token`;
   - `credentials(envPrefix)`: reads the env pair and fails with a clear message when it is missing.
 - `fixtures/target.fixture.ts`: `toolshopTarget` (`"live"` or `"local"`), set by `playwright.config.ts` from `TOOLSHOP_TARGET`.
-- `fixtures/cleanup.fixture.ts`: wraps `request` and deletes, with the admin token, every brand a test created with `POST /brands`. To clean up another collection, add its path to `CLEANED_UP`.
+- `fixtures/cleanup.fixture.ts`: wraps `request` and deletes, with the admin token, every brand (`POST /brands`) and user (`POST /users/register`) a test created. To clean up another collection, add its create path and delete path to `CLEANED_UP`. Users registered by the `customerToken` fixture are not cleaned up yet.
 
 ## Using them
 

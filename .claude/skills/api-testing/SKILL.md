@@ -18,19 +18,30 @@ npm run contract -- /users                  # endpoints in an area, and which ne
 npm run contract -- POST /users/register    # request body, auth, every response with its shape
 ```
 
+The contract, not what the API happens to return, is the source of truth. Read it before you call the API, and call the API (or read the source code) only for what the contract doesn't say.
+
 Toolshop's contract has these quirks:
 
 - **No field is marked `required`.** For a request, find out what is required from a 422 response. For a response schema, make the fields the API returns in that scenario required, and the fields that are documented but not returned optional. `UserResponseSchema` in `schemas/user.schema.ts` is an example.
-- **Some status codes are missing from the contract.** For example, `POST /users/login` documents only 200, but the code also returns 401 for a wrong password and 423 for a locked account. Test the real codes, and add a comment such as `// 401 tidak ada di kontrak`. If one of those tests fails, Redline reports an undocumented status as a contract violation.
+- **Some status codes are missing from the contract.** For example, `POST /users/login` documents only 200, but the code also returns 401, 403 and 423. Observed behaviour is a stopgap, not the spec: test the real codes, say in a comment that they pin current behaviour, and report the missing documentation. If one of those tests fails, Redline reports an undocumented status as a contract violation.
 - When the contract and `~/Developer/practice-software-testing/sprint5/API` disagree, the source code shows what really happens, and the contract is what should happen.
 
 ## 2. Test-case matrix (before any code)
 
 Write a table and show it to the user before writing tests:
 
-| ID         | Scenario                       | Request           | Expected           | Source       |
-| ---------- | ------------------------------ | ----------------- | ------------------ | ------------ |
-| TC-USR-004 | Login succeeds with a new user | POST /users/login | 200 + token schema | contract 200 |
+| ID         | Scenario                          | Request           | Expected           | Oracle            |
+| ---------- | --------------------------------- | ----------------- | ------------------ | ----------------- |
+| TC-USR-002 | Login succeeds with a new user    | POST /users/login | 200 + token schema | contract          |
+| TC-USR-005 | Login fails when email is missing | POST /users/login | 401                | current behaviour |
+
+The **oracle** is what says the expected result is right:
+
+- `contract`: the OpenAPI contract;
+- `requirement`: the user, a ticket or the app's documentation;
+- `current behaviour`: only the source code or a call to the API. Such a test pins what the API does today, so it can't find a bug in that behaviour.
+
+For every `current behaviour` row, ask whether a tester would expect something else (for example 401 where a missing field usually gives 422). If so, don't quietly make it the expectation: list it under **QA questions** with the plan, and let the user decide. Accepted: keep the test with a comment that says why. A bug: write the test as it should be, with `test.skip` and `FIXME` (§5).
 
 The rows to cover:
 
@@ -74,13 +85,15 @@ REDLINE=0 npx playwright test --grep "(@TC-USR-004|@TC-USR-005)\b"   # the new t
 npm run format && npm run lint && npx tsc -p . && npm run check:ids
 ```
 
-Report the matrix with a result per row: pass, skipped with FIXME, or not testable and why. Report any contract findings separately.
+Report the matrix with a result per row: pass, skipped with FIXME, or not testable and why. Report contract findings (including missing documentation) and open QA questions separately.
 
 ## Pitfalls
 
 - **Three failed logins lock a customer account** (423); admins are never locked or counted. Never use the seed accounts for negative login tests: register a fresh customer, also for lockout tests.
 - **JWT tokens live 5 minutes.** Don't store tokens in files.
 - **Ids are ULID strings** (`01m51z…`), not numbers.
+- **Login errors are `{ "error": "<reason>" }`** (`LoginErrorSchema`), not `{ message }`: 401 `Unauthorized` (wrong password, unknown email, a non-string field) or `Invalid login request` (email or password missing or empty), 403 `Account disabled`, 423 after three wrong passwords. A successful login resets the count.
+- **Admin `GET /users/{userId}` also returns `role`**, which the contract doesn't list, so `UserResponseSchema` rejects it. Don't add `role` to the schema to make a test pass; report it (`api-testing` §5).
 - **`/brands/search` uses MySQL full-text in BOOLEAN MODE**, and caches each query for an hour.
   - `-` means "exclude this word", so a hyphenated UUID can hide the brand it names. Search with a unique word without `-`.
   - Any one word matches, so assert `toContainEqual`, never an exact list.

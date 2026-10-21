@@ -48,7 +48,7 @@ Every run also writes [Allure](https://allurereport.org) results. `npm run repor
 Before pushing:
 
 ```bash
-npm run format && npm run lint && npx tsc -p . && npm run check:ids
+npm run format && npm run lint && npx tsc -p . && npm run check:ids && npm run check:drift
 ```
 
 ## Test coverage
@@ -168,7 +168,7 @@ redline-bench/              # benchmark specs and planted bugs
 
 ## Working with AI
 
-AI assistants follow the rulebook in [`AGENTS.md`](AGENTS.md) (Claude Code reads it through `CLAUDE.md`): context, commands, and a Constitution of MUST / SHOULD / WON'T rules taken from how the tests here are written. The AI setup is built in phases (guardrail hooks, skills, a verify-with-Redline workflow, a reviewer); the roadmap is in [`docs/orchestra.md`](docs/orchestra.md).
+AI assistants follow the rulebook in [`AGENTS.md`](AGENTS.md) (Claude Code reads it through `CLAUDE.md`): context, commands, and a Constitution of MUST / SHOULD / WON'T rules taken from how the tests here are written. The AI setup is built in phases (guardrail hooks, skills, a verify-with-Redline workflow, a reviewer); the roadmap is in [`docs/orchestra.md`](docs/orchestra.md). `npm run check:drift` (in CI) fails when a rule marked `(checked: <id>)` in `AGENTS.md` is missing from the Claude Code hook or from ESLint.
 
 ## CI
 

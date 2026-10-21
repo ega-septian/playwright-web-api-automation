@@ -33,6 +33,9 @@ jobs:
       - name: Test case IDs
         # Setiap test punya tepat satu tag @TC- yang unik (Redline memakainya untuk menyambung riwayat test).
         run: npm run check:ids
+      - name: Rule drift
+        # Every rule marked (checked: <id>) in AGENTS.md is enforced by the Claude Code hook and by ESLint.
+        run: npm run check:drift
       - name: Security audit
         # Hanya peringatan: celah di dependency tidak membuat CI merah.
         run: npm audit --audit-level=high

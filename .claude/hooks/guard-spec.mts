@@ -1,12 +1,13 @@
 /**
- * Hook PreToolUse Claude Code: tolak penulisan spec dan schema yang melanggar aturan repo (AGENTS.md, Constitution),
- * sebelum file berubah. ESLint dan check:ids di CI mengecek hal yang sama untuk semua orang; hook ini memberi
- * umpan balik lebih cepat ke AI.
+ * Claude Code PreToolUse hook: rejects writes to specs and schemas that break the repo rules (AGENTS.md,
+ * Constitution) before the file changes. ESLint and check:ids check the same things for everyone in CI;
+ * this hook gives the AI faster feedback.
  *
- * Yang dicek hanya baris yang BARU ditulis, jadi kode lama yang belum rapi tidak memblokir edit di tempat lain.
+ * Only the lines being written are checked, so old code elsewhere in the file doesn't block an edit.
+ * Each rule's `id` is the one in AGENTS.md's "(checked: <id>)"; `npm run check:drift` keeps them in sync.
  *
- * Kontrak hook: input JSON di stdin ({ tool_name, tool_input }). Exit 0 = boleh, exit 2 = tolak (stderr
- * dikirim ke AI sebagai alasan).
+ * Hook contract: JSON on stdin ({ tool_name, tool_input }). Exit 0 = allow, exit 2 = reject (stderr goes
+ * to the AI as the reason).
  */
 import { existsSync, readFileSync } from "node:fs";
 
@@ -16,52 +17,56 @@ type ToolInput = { file_path?: string; content?: string; edits?: Edit[] } & Edit
 const SPEC_FILE = /(^|\/)tests\/.+\.spec\.ts$/;
 const SCHEMA_FILE = /(^|\/)tests\/.+\/schemas\/.+\.ts$/;
 
-type Rule = { files: RegExp; test: (added: string) => boolean; message: string };
+type Rule = { id: string; files: RegExp; test: (added: string) => boolean; message: string };
 
 const RULES: Rule[] = [
   {
+    id: "strict-schema",
     files: SCHEMA_FILE,
     test: (s) => /\bz\.object\(/.test(s),
-    message:
-      "Schema memakai z.strictObject, bukan z.object, supaya field yang tidak ada di kontrak ketahuan (MUST: Schemas).",
+    message: "Use z.strictObject, not z.object, so a field that is not in the contract fails.",
   },
   {
+    id: "imports",
     files: SPEC_FILE,
     test: (s) => /from\s+["'](@playwright\/test|redline-playwright\/fixture)["']/.test(s),
     message:
-      "Spec import test dan expect dari ./fixtures, bukan @playwright/test atau redline-playwright/fixture (MUST: Imports).",
+      "Import test and expect from ./fixtures, not from @playwright/test or redline-playwright/fixture.",
   },
   {
+    id: "no-fixed-wait",
     files: SPEC_FILE,
     test: (s) => /\bwaitForTimeout\s*\(/.test(s),
     message:
-      "waitForTimeout dilarang. Tunggu kondisinya (status, response, assertion) (WON'T: fixed waits).",
+      "No waitForTimeout. Wait for the condition instead (a status, a response, an assertion).",
   },
   {
+    id: "no-only",
     files: SPEC_FILE,
     test: (s) => /\b(test|describe)\.only\s*\(/.test(s),
-    message: "test.only atau describe.only tertinggal (WON'T: test.only).",
+    message: "test.only or describe.only left in.",
   },
   {
+    id: "no-hardcoded-id",
     files: SPEC_FILE,
     test: (s) => /["'`]\/[a-z_-]+\/[0-9]+([/?"'`]|$)/m.test(s),
     message:
-      "ID hardcode di URL, misalnya /brands/1. Buat datanya di test dan pakai id-nya (WON'T: hardcoded ids).",
+      "Hardcoded id in a URL, such as /brands/1. Create the data in the test and use its id.",
   },
   {
+    id: "test-ids",
     files: SPEC_FILE,
-    // Deklarasi test baru (bukan test.step/test.describe) harus membawa tag @TC- di teks yang sama.
+    // A new test (not test.step or test.describe) needs its @TC- tag in the same text.
     test: (s) => {
       const tests = s.match(/\btest\(\s*(["'`]|$)/gm)?.length ?? 0;
       const ids = s.match(/@TC-[A-Z0-9]+(-[0-9]+)?\b/g)?.length ?? 0;
       return tests > ids;
     },
-    message:
-      'Setiap test butuh tepat satu tag @TC-<AREA>-<NNN>, misalnya { tag: "@TC-BRD-021" } (MUST: Test case IDs).',
+    message: 'Every test needs exactly one @TC-<AREA>-<NNN> tag, e.g. { tag: "@TC-BRD-021" }.',
   },
 ];
 
-/** Baris di `after` yang belum ada di `before`. */
+/** Lines in `after` that are not in `before`. */
 function addedLines(before: string, after: string): string {
   const old = new Set(before.split("\n").map((l) => l.trim()));
   return after
@@ -89,9 +94,11 @@ const file = input.file_path ?? "";
 const rules = RULES.filter((r) => r.files.test(file));
 if (["Write", "Edit", "MultiEdit"].includes(tool) && rules.length > 0) {
   const added = addedText(tool, input);
-  const broken = rules.filter((r) => r.test(added)).map((r) => `- ${r.message}`);
+  const broken = rules
+    .filter((r) => r.test(added))
+    .map((r) => `- ${r.message} (AGENTS.md: ${r.id})`);
   if (broken.length > 0) {
-    console.error(`Ditolak oleh aturan repo (AGENTS.md):\n${broken.join("\n")}`);
+    console.error(`Rejected by the repo rules (AGENTS.md):\n${broken.join("\n")}`);
     process.exit(2);
   }
 }

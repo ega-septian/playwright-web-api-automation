@@ -36,6 +36,7 @@ In branch and PR mode, review the changed lines **and the whole tests they belon
 npx eslint <changed .ts files>                 # warnings count too: say which rule
 npx tsc -p . --noEmit
 npm run check:ids
+npm run check:drift                            # a (checked) rule missing from AGENTS.md, the hook or ESLint
 npm run check:weakening                        # tests deleted, fewer expects, a status removed or replaced, new skip/only
 REDLINE=0 npx playwright test <changed spec files>
 ```

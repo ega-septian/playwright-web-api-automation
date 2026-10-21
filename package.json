@@ -17,6 +17,7 @@
     "redline:bench": "node scripts/redline-bench.mts",
     "check:ids": "node scripts/check-test-ids.mts",
     "check:weakening": "node scripts/check-weakening.mts",
+    "check:drift": "node scripts/check-drift.mts",
     "contract": "node scripts/contract.mts",
     "report:allure": "allure generate",
     "report:allure:open": "allure open test-results/allure-report"

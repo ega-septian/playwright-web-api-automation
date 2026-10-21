@@ -19,22 +19,22 @@ npx playwright test --grep @TC-BRD-003        # one test while writing (set REDL
 TOOLSHOP_TARGET=local npx playwright test     # against Toolshop in Docker instead of live
 npm run test:allure TC-BRD-001 TC-BRD-005     # run, then open the Allure report (also: a spec name, e.g. brand)
 npm run test:ai TC-BRD-003                    # same, with Redline's explanation of failures
-npm run format && npm run lint && npx tsc -p . && npm run check:ids   # before every commit
+npm run format && npm run lint && npx tsc -p . && npm run check:ids && npm run check:drift   # before every commit
 npm run check:weakening                       # tests deleted, fewer expects, a status removed or replaced, new skip (vs origin/main)
 ```
 
 ## Constitution
 
-Rules marked **(checked)** are enforced for everyone by ESLint and CI, and for Claude Code also by a hook that blocks the write (`.claude/hooks/guard-spec.mts`). The rest are for review.
+Rules marked **(checked: <id>)** are enforced for everyone by ESLint and CI, and for Claude Code also by a hook that blocks the write (`.claude/hooks/guard-spec.mts`). The rest are for review. A new checked rule needs its id in all three places and an example in `scripts/check-drift.mts`; `npm run check:drift` fails otherwise.
 
 ### MUST
 
-- **Imports (checked):** specs import `test` and `expect` from `./fixtures`.
-- **Test case IDs (checked):** every test has exactly one `@TC-<AREA>-<NNN>` tag (e.g. `@TC-BRD-017`), unique and never reused. Don't change a test's ID and its title in the same PR. Don't rename the Playwright project `toolshop`. Redline uses both to keep a test's history.
+- **Imports (checked: imports):** specs import `test` and `expect` from `./fixtures`.
+- **Test case IDs (checked: test-ids):** every test has exactly one `@TC-<AREA>-<NNN>` tag (e.g. `@TC-BRD-017`), unique and never reused. Don't change a test's ID and its title in the same PR. Don't rename the Playwright project `toolshop`. Redline uses both to keep a test's history.
 - **Structure:** one `test.describe` per endpoint (`"POST /brands"`), tags on tests only.
 - **Own data:** tests create the data they need with factories from `data/` (Faker, override only what matters). Never depend on seed data ids or on another test. Brands created with `POST /brands` are deleted after the test by the `cleanup` fixture.
 - **Shared server:** a test that changes state other people on live depend on (for example creating a product, which clears the whole server cache) starts with `test.skip(toolshopTarget === "live", "<reason>")`.
-- **Schemas (checked):** response schemas in `schemas/` use `z.strictObject`, so a field that is not in the contract fails the test. Fields the API returns are required; fields documented but not returned are optional.
+- **Schemas (checked: strict-schema):** response schemas in `schemas/` use `z.strictObject`, so a field that is not in the contract fails the test. Fields the API returns are required; fields documented but not returned are optional.
 - **Assertions in order:** 1. status code, 2. contract (`Schema.parse(await response.json())` with a schema from `schemas/`), 3. the values that matter for the scenario.
 - **Writes are verified with a follow-up read** (`GET` after create, update and delete; after a rejected write, check the data did not change).
 - **Auth:** ask for the `adminToken` or `customerToken` fixture; use `login(request, credentials)` for a user created in the test. Tests about auth itself (missing token, wrong role) call the API without the fixture token.
@@ -51,13 +51,13 @@ Rules marked **(checked)** are enforced for everyone by ESLint and CI, and for C
 
 ### WON'T
 
-- No `waitForTimeout` or other fixed waits **(checked)**.
-- No hardcoded ids such as `/brands/1` **(checked)**.
+- No `waitForTimeout` or other fixed waits **(checked: no-fixed-wait)**.
+- No hardcoded ids such as `/brands/1` **(checked: no-hardcoded-id)**.
 - No negative login tests with the seed accounts: three failed logins lock a customer account (423), for everyone on live (admins are never locked, so lockout tests also need a customer). Register a fresh user instead.
 - No changing an expected status code or schema just to make a test pass against behaviour the contract does not allow.
-- No `test.only` **(checked)**, no tags on `describe`, no `any`.
+- No `test.only` **(checked: no-only)**, no tags on `describe`, no `any`.
 - No secrets in code, logs or commits. `.env` is never committed; print variable names only, never values.
-- No imports from `@playwright/test` or `redline-playwright/fixture` in spec files **(checked)**.
+- No imports from `@playwright/test` or `redline-playwright/fixture` in spec files **(checked: imports)**.
 
 ## Working with AI
 

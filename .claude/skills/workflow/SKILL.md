@@ -39,7 +39,8 @@ Show the user this block before changing anything:
 ```
 ## Plan
 - Task: <one line>
-- Test cases: <matrix from api-testing §2, or "none">
+- Test cases: <matrix from api-testing §2, with the oracle per row, or "none">
+- QA questions: <current behaviour that looks wrong and needs the user's call (api-testing §2), or "none">
 - Files: <files to add or change>
 - Verify: <exact commands>
 
@@ -108,6 +109,7 @@ A test may be called done only when it passes, or when it is skipped with a `FIX
 - Checks: format, lint, types, ids — pass/fail
 - Redline: <verdicts for failures you hit, and what you did>
 - Findings: <contract gaps, bugs, things noticed but not changed>
+- QA questions: <expected results that rest only on current behaviour and look wrong, for the user to decide; or "none">
 - Next: <what the user should decide or do>
 ```
 

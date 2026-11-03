@@ -2,8 +2,10 @@ name: Playwright Tests
 # API tests against the live Toolshop demo (api.practicesoftwaretesting.com) by default. Run the workflow
 # by hand with target "local" to start Toolshop (Practice Software Testing) in Docker on the runner instead,
 # like Toolshop's own workflow (.github/workflows/run-tests.yml in their repo).
-# Redline (dengan DozerDB) ikut berjalan di runner untuk menjelaskan kegagalan dengan aturan, tanpa AI. Laporan
-# Allure dari main diterbitkan ke GitHub Pages; riwayat trennya dibawa dari laporan sebelumnya.
+# Redline normally runs inside the job (DozerDB service + pinned server). Set the repository variable
+# REDLINE_TAILNET_HOST to report to a persistent Redline on your laptop over Tailscale instead; every
+# run then keeps its history. See docs/redline-tailscale.md. Laporan Allure dari main diterbitkan ke
+# GitHub Pages; riwayat trennya dibawa dari laporan sebelumnya.
 on:
   pull_request:
     branches: [main]
@@ -27,8 +29,12 @@ env:
   TOOLSHOP_REF: 5a6ccc2668405c96de9e205beb441f34be8d9ecc
   SPRINT: sprint5
   DISABLE_LOGGING: "true"
-  # Versi Redline yang dipakai di CI, dikunci supaya hasilnya bisa diulang.
+  # Versi Redline yang dipakai di CI, dikunci supaya hasilnya bisa diulang. Hanya dipakai kalau
+  # REDLINE_TAILNET_HOST kosong (mode ephemeral).
   REDLINE_REF: v0.4.0
+  # Kosong = Redline ephemeral di dalam job. Isi dengan <machine>.<tailnet>.ts.net untuk mengirim
+  # report ke Redline persisten di laptop lewat Tailscale (docs/redline-tailscale.md).
+  REDLINE_TAILNET_HOST: ${{ vars.REDLINE_TAILNET_HOST }}
   PAGES_URL: https://ega-septian.github.io/playwright-web-api-automation
 
 jobs:
@@ -40,6 +46,7 @@ jobs:
     services:
       neo4j:
         # Database Redline, sama dengan docker-compose.yml di repo Redline. Kosong di setiap run.
+        # Tetap dinyalakan di mode external; biayanya kecil dan workflow tetap satu job.
         image: graphstack/dozerdb:5.26.27.0
         env:
           NEO4J_AUTH: neo4j/redline-local
@@ -54,6 +61,14 @@ jobs:
           --health-retries 40
     steps:
       - uses: actions/checkout@v4
+
+      - name: Redline mode
+        run: |
+          if [ -n "$REDLINE_TAILNET_HOST" ]; then
+            echo "Reporting to persistent Redline at https://$REDLINE_TAILNET_HOST"
+          else
+            echo "Starting a throwaway Redline in this job"
+          fi
 
       - name: Checkout Toolshop
         if: env.TOOLSHOP_TARGET == 'local'
@@ -105,6 +120,7 @@ jobs:
           echo "API tidak menjawab di http://localhost:8091/status"; exit 1
 
       - name: Checkout Redline
+        if: env.REDLINE_TAILNET_HOST == ''
         uses: actions/checkout@v4
         with:
           repository: ega-septian/redline
@@ -112,11 +128,13 @@ jobs:
           path: redline
 
       - uses: actions/setup-go@v5
+        if: env.REDLINE_TAILNET_HOST == ''
         with:
           go-version-file: redline/go.mod
           cache-dependency-path: redline/go.sum
 
       - name: Start Redline
+        if: env.REDLINE_TAILNET_HOST == ''
         working-directory: redline
         # Tanpa ANTHROPIC_API_KEY: kegagalan dijelaskan dengan aturan saja (tanpa biaya). Database baru setiap
         # run, jadi belum ada riwayat "terakhir lulus" untuk dibandingkan.
@@ -128,6 +146,26 @@ jobs:
             sleep 1
           done
           echo "Redline tidak menjawab di http://localhost:8787/healthz"; cat redline.log; exit 1
+
+      - name: Connect to Tailscale
+        if: env.REDLINE_TAILNET_HOST != ''
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ vars.REDLINE_TAILNET_HOST }}
+
+      - name: Check external Redline
+        if: env.REDLINE_TAILNET_HOST != ''
+        env:
+          REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
+        run: |
+          curl -sf --retry 10 --retry-delay 2 --retry-all-errors \
+            "https://${{ env.REDLINE_TAILNET_HOST }}/readyz"
+          # Fail before the suite if the key does not match; /readyz is open on purpose.
+          curl -sf -H "Authorization: Bearer $REDLINE_API_KEY" \
+            "https://${{ env.REDLINE_TAILNET_HOST }}/api/runs?limit=1" > /dev/null
 
       - uses: actions/setup-node@v4
         with:
@@ -147,6 +185,9 @@ jobs:
       - name: Run Playwright tests
         run: npx playwright test
         env:
+          # External mode: send to the Tailscale Serve URL; otherwise the throwaway server on localhost.
+          REDLINE_URL: ${{ vars.REDLINE_TAILNET_HOST != '' && format('https://{0}', vars.REDLINE_TAILNET_HOST) || 'http://localhost:8787' }}
+          REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
           # REDLINE_AI=1 meminta analisis; tanpa API key di server, yang dipakai hanya aturan.
           REDLINE_AI: "1"
           # Toolshop's seed admin, the same for everyone (live and Docker): not a secret. Customers are
@@ -167,7 +208,7 @@ jobs:
         run: docker compose logs --tail=200 laravel-api web mariadb
 
       - name: Redline logs (on failure)
-        if: failure()
+        if: failure() && env.REDLINE_TAILNET_HOST == ''
         run: tail -100 redline/redline.log || true
 
       - uses: actions/upload-artifact@v4

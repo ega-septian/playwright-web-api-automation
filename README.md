@@ -185,6 +185,6 @@ AI assistants follow the rulebook in [`AGENTS.md`](AGENTS.md) (Claude Code reads
 
 `.github/workflows/playwright.yml` runs the API tests on every pull request and push to `main`, against the live Toolshop demo. Run it by hand (Actions → Playwright Tests → Run workflow) with target `local` to start Toolshop (sprint 5, API and database only) with Docker on the runner, seed the database and test against that instead.
 
-Redline runs in the same job (DozerDB as a service, Redline pinned to a release), so a failure in CI is explained in the job summary and in the Allure report. CI has no AI key: causes come from Redline's rules only, at no cost, and the database is new on every run, so there is no history of earlier runs to compare with.
+Redline runs in the same job (DozerDB as a service, Redline pinned to a release), so a failure in CI is explained in the job summary and in the Allure report. CI has no AI key: causes come from Redline's rules only, at no cost, and the database is new on every run, so there is no history of earlier runs to compare with. To keep history across CI runs without a public server, set `REDLINE_TAILNET_HOST` and follow [`docs/redline-tailscale.md`](docs/redline-tailscale.md).
 
 The Playwright and Allure reports are uploaded as artifacts. On `main`, the Allure report is also published to [GitHub Pages](https://ega-septian.github.io/playwright-web-api-automation/), even when tests fail; the trend history is carried over from the previously published report.

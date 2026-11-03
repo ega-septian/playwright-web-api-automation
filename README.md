@@ -81,12 +81,12 @@ The full rules are in [`AGENTS.md`](AGENTS.md). Redline's commands, benchmark an
 
 ## CI
 
-| Workflow                                             | Runs                                                                                                                                                                    |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`ci.yml`](.github/workflows/ci.yml)                 | Types, lint, format, specs load, test case IDs, rule drift, security audit (warning only)                                                                               |
-| [`playwright.yml`](.github/workflows/playwright.yml) | The API tests against the live demo, with Redline (rules only, no AI cost). Run it by hand with target `local` to test against Toolshop in Docker on the runner instead |
+| Workflow                                             | Runs                                                                                                                                                                      |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`ci.yml`](.github/workflows/ci.yml)                 | Types, lint, format, specs load, test case IDs, rule drift, security audit (warning only)                                                                                 |
+| [`playwright.yml`](.github/workflows/playwright.yml) | The API tests against the live demo, with Redline (rules first; AI optional). Run it by hand with target `local` to test against Toolshop in Docker on the runner instead |
 
-On `main`, the Allure report is published to [GitHub Pages](https://ega-septian.github.io/playwright-web-api-automation/), even when tests fail, with a trend across runs.
+On `main`, the Allure report is published to [GitHub Pages](https://ega-septian.github.io/playwright-web-api-automation/), even when tests fail, with a trend across runs. The workflow can also send every run to a persistent Redline on your laptop over Tailscale; see [`docs/redline-tailscale.md`](docs/redline-tailscale.md).
 
 ## Project structure
 

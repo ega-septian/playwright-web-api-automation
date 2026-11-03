@@ -24,7 +24,7 @@ The reporter, the fixture and the CLI come from the Redline repo as the `redline
 
 Without a Redline server the tests run normally. Set `REDLINE=0` to turn it off, for example in `.env` while writing tests. `REDLINE_AI=1` or `REDLINE_VERIFY=1` on the command line turn it back on for that run; whatever you type on the command line wins over `.env`. If the Redline server has an API key, put the same `REDLINE_API_KEY` in `.env` (and `REDLINE_URL` if it is not on `localhost:8787`).
 
-In CI, Redline runs in the same job (DozerDB as a service, Redline pinned to a release) with rules only: no AI key, no cost, and no history from earlier runs.
+In CI, Redline normally runs in the same job (DozerDB as a service, Redline pinned to a release) with rules first: without an AI key, causes come from rules only and there is no history from earlier runs. To keep history, comparison and trace/screenshot artifacts across runs without a public server, set the `REDLINE_TAILNET_HOST` repository variable and point the workflow at a Redline on your laptop over Tailscale; see [`redline-tailscale.md`](redline-tailscale.md). The workflow asks for AI when `REDLINE_AI=1`, but the server only calls Claude when it has an `ANTHROPIC_API_KEY`; leave the key empty on a CI-only server to stay rules-only.
 
 ## Benchmark
 

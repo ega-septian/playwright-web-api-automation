@@ -18,6 +18,7 @@
     "check:ids": "node scripts/check-test-ids.mts",
     "check:weakening": "node scripts/check-weakening.mts",
     "check:drift": "node scripts/check-drift.mts",
+    "check:redline-ref": "node scripts/check-redline-ref.mts",
     "contract": "node scripts/contract.mts",
     "report:allure": "allure generate",
     "report:allure:open": "allure open test-results/allure-report"
@@ -39,7 +40,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-playwright": "^2.12.1",
     "prettier": "^3.9.9",
-    "redline-playwright": "github:ega-septian/redline#v0.5.0",
+    "redline-playwright": "github:ega-septian/redline#v0.7.0",
     "typescript-eslint": "^8.71.1"
   },
   "dependencies": {

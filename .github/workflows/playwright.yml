@@ -29,9 +29,9 @@ env:
   TOOLSHOP_REF: 5a6ccc2668405c96de9e205beb441f34be8d9ecc
   SPRINT: sprint5
   DISABLE_LOGGING: "true"
-  # Versi Redline yang dipakai di CI, dikunci supaya hasilnya bisa diulang. Hanya dipakai kalau
-  # REDLINE_TAILNET_HOST kosong (mode ephemeral).
-  REDLINE_REF: v0.4.0
+  # Versi Redline yang dipakai di CI, dikunci supaya hasilnya bisa diulang. Harus sama dengan tag
+  # paket redline-playwright di package.json; `npm run check:redline-ref` menjaga keduanya.
+  REDLINE_REF: v0.7.0
   # Kosong = Redline ephemeral di dalam job. Isi dengan <machine>.<tailnet>.ts.net untuk mengirim
   # report ke Redline persisten di laptop lewat Tailscale (docs/redline-tailscale.md).
   REDLINE_TAILNET_HOST: ${{ vars.REDLINE_TAILNET_HOST }}

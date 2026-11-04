@@ -1,7 +1,7 @@
 name: Playwright Tests
-# API tests against the live Toolshop demo (api.practicesoftwaretesting.com) by default. Run the workflow
-# by hand with target "local" to start Toolshop (Practice Software Testing) in Docker on the runner instead,
-# like Toolshop's own workflow (.github/workflows/run-tests.yml in their repo).
+# API tests against Toolshop sprint 5 in Docker on the runner by default, so CI does not depend on
+# the shared public demo. Run the workflow by hand with target "live" for the demo instead; the live
+# demo is shared and its credentials/data can change.
 # Redline normally runs inside the job (DozerDB service + pinned server). Set the repository variable
 # REDLINE_TAILNET_HOST to report to a persistent Redline on your laptop over Tailscale instead; every
 # run then keeps its history. See docs/redline-tailscale.md. Laporan Allure dari main diterbitkan ke
@@ -16,8 +16,8 @@ on:
       target:
         description: Toolshop to test against
         type: choice
-        options: [live, local]
-        default: live
+        options: [local, live]
+        default: local
       scope:
         description: Tests to run
         type: choice
@@ -33,7 +33,7 @@ permissions:
   pull-requests: write
 
 env:
-  TOOLSHOP_TARGET: ${{ inputs.target || 'live' }}
+  TOOLSHOP_TARGET: ${{ inputs.target || 'local' }}
   # PRs can opt into affected-only runs with the repository variable REDLINE_PR_SCOPE=affected.
   # Push/main and manual runs default to full; manual runs can choose affected in the dispatch form.
   TEST_SCOPE: ${{ github.event_name == 'pull_request' && (vars.REDLINE_PR_SCOPE || 'full') || inputs.scope || 'full' }}

@@ -28,6 +28,12 @@ In CI, Redline normally runs in the same job (DozerDB as a service, Redline pinn
 
 Contract sources live in Redline's database. The ephemeral job seeds `toolshop` from the in-job Toolshop (`http://localhost:8091/docs`) right after the server starts, while a persistent Redline keeps the sources saved in Config across runs.
 
+### Manual ephemeral run
+
+To exercise the self-contained path without changing normal CI, run **Playwright Tests** manually with `redline: ephemeral` (Actions → Run workflow). In that mode the job ignores `REDLINE_TAILNET_HOST`, starts Redline and its database inside the runner, seeds the contract, runs the suite, and applies the same gate using `redline-quarantine.json`. The job uploads `redline-report` (`redline-report.md`, `redline-last-run.json`, `results.json`) so debugging does not depend on the laptop.
+
+Pick the branch in the Run workflow dialog before merging; normal PR and push runs keep using the persistent Redline while `REDLINE_TAILNET_HOST` is set.
+
 ## PR impact (advisory)
 
 `scripts/redline-impact.mts` maps the files changed in a pull request to tests through Redline's impact graph and updates one sticky PR comment. The full suite still runs; this is an advisory summary, not a gate.

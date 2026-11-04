@@ -268,8 +268,6 @@ async function startServer(
     REDLINE_API_KEY: "",
   };
   if (!memory) env.VOYAGE_API_KEY = ""; // ada tapi kosong: .env tidak menimpanya
-  // Kontrak dibaca lewat proxy: biasanya diteruskan apa adanya, kecuali kasus upgrade yang mengubahnya.
-  env.OPENAPI_SPECS = contract ? `bench=http://localhost:${PROXY_PORT}/docs` : "";
   const child = spawn(bin, [], { cwd: REDLINE_DIR, env, stdio: ["ignore", "pipe", "pipe"] });
   // Log server disimpan ke file, supaya penyebab "analisis gagal" bisa dicek setelah benchmark selesai.
   mkdirSync(OUT_DIR, { recursive: true });
@@ -283,10 +281,27 @@ async function startServer(
   child.stdout?.on("data", keep);
   child.stderr?.on("data", keep);
   for (let i = 0; i < 60; i++) {
+    let ready = false;
     try {
-      if ((await fetch(`${SERVER_URL}/healthz`)).ok) return child;
+      ready = (await fetch(`${SERVER_URL}/healthz`)).ok;
     } catch {
       // belum siap
+    }
+    if (ready) {
+      if (contract) {
+        // Kontrak hidup di database, bukan env. Seed lewat proxy supaya kasus upgrade tetap teruji.
+        const res = await fetch(`${SERVER_URL}/api/config/contracts`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project: "bench", url: `http://localhost:${PROXY_PORT}/docs` }),
+        });
+        if (!res.ok) {
+          const body = await res.text();
+          child.kill();
+          throw new Error(`seed kontrak benchmark gagal: HTTP ${res.status} ${body.slice(0, 300)}`);
+        }
+      }
+      return child;
     }
     if (child.exitCode !== null) break;
     await new Promise((r) => setTimeout(r, 500));

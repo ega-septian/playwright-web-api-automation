@@ -33,6 +33,9 @@ jobs:
       - name: Test case IDs
         # Setiap test punya tepat satu tag @TC- yang unik (Redline memakainya untuk menyambung riwayat test).
         run: npm run check:ids
+      - name: Quarantine file
+        # Quarantine sebagai kode: validasi skema, tanggal, dan batas 90 hari sebelum gate memakainya.
+        run: npm run check:quarantine
       - name: Redline version alignment
         # Paket redline-playwright (package.json) dan server Redline (playwright.yml) harus satu tag.
         run: npm run check:redline-ref

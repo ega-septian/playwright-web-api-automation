@@ -11,6 +11,8 @@
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { loadQuarantines, type FileQuarantine } from "./redline-quarantine.mts";
+
 type LastRun = { url?: string; run_id?: number };
 type RunResult = {
   test: string;
@@ -77,11 +79,14 @@ function markdown(
   run: RunDetail["run"],
   failed: RunResult[],
   blocking: RunResult[],
-  allowed: RunResult[],
+  fileAllowed: RunResult[],
+  dbAllowed: RunResult[],
+  expired: FileQuarantine[],
 ): string {
+  const allowed = fileAllowed.length + dbAllowed.length;
   const lines = ["### Redline quality gate", ""];
   lines.push(
-    `Run #${run.id}: **${failed.length} failed**, ${allowed.length} quarantined, **${blocking.length} blocking**, ${run.flaky} flaky.`,
+    `Run #${run.id}: **${failed.length} failed**, ${allowed} quarantined (file: ${fileAllowed.length}, Redline: ${dbAllowed.length}), **${blocking.length} blocking**, ${run.flaky} flaky.`,
   );
   if (run.report_errors?.length) {
     lines.push("", `Report errors: ${run.report_errors.join(" · ")}`);
@@ -93,10 +98,20 @@ function markdown(
       if (test.error) lines.push(`  ${test.error.replace(/\s+/g, " ").slice(0, 180)}`);
     }
   }
-  if (allowed.length > 0) {
-    lines.push("", "Allowed by active quarantine:", "");
-    for (const test of allowed) {
+  for (const [title, tests] of [
+    ["Allowed by quarantine file", fileAllowed],
+    ["Allowed by Redline UI quarantine", dbAllowed],
+  ] as const) {
+    if (tests.length === 0) continue;
+    lines.push("", `${title}:`, "");
+    for (const test of tests) {
       lines.push(`- **${test.test_case_id || "—"}** ${test.test}`);
+    }
+  }
+  if (expired.length > 0) {
+    lines.push("", "Expired quarantine file entries (ignored):", "");
+    for (const item of expired) {
+      lines.push(`- **${item.test}** expired ${item.until} (${item.owner})`);
     }
   }
   if (blocking.length === 0) lines.push("", "Gate passed.");
@@ -128,10 +143,17 @@ async function main() {
     );
   }
 
-  const keys = new Set(quarantines.map((q) => q.key));
-  const blocking = failed.filter((test) => !isQuarantined(test, keys));
-  const allowed = failed.filter((test) => isQuarantined(test, keys));
-  const body = markdown(detail.run, failed, blocking, allowed);
+  const { active: fileQuarantines, expired } = loadQuarantines();
+  const fileKeys = new Set(fileQuarantines.map((item) => item.test));
+  const dbKeys = new Set(quarantines.map((q) => q.key));
+  const fileAllowed = failed.filter((test) => isQuarantined(test, fileKeys));
+  const dbAllowed = failed.filter(
+    (test) => !isQuarantined(test, fileKeys) && isQuarantined(test, dbKeys),
+  );
+  const blocking = failed.filter(
+    (test) => !isQuarantined(test, fileKeys) && !isQuarantined(test, dbKeys),
+  );
+  const body = markdown(detail.run, failed, blocking, fileAllowed, dbAllowed, expired);
 
   console.log(body);
   const summary = process.env.GITHUB_STEP_SUMMARY;
@@ -140,8 +162,12 @@ async function main() {
     console.error(`[redline-gate] ${blocking.length} failure tanpa quarantine aktif`);
     process.exitCode = 1;
   } else {
+    const parts = [
+      fileAllowed.length ? `${fileAllowed.length} dari file` : "",
+      dbAllowed.length ? `${dbAllowed.length} dari Redline UI` : "",
+    ].filter(Boolean);
     console.log(
-      `[redline-gate] lolos${allowed.length ? `; ${allowed.length} failure di-quarantine` : ""}.`,
+      `[redline-gate] lolos${parts.length ? `; failure di-quarantine: ${parts.join(", ")}` : ""}.`,
     );
   }
 }

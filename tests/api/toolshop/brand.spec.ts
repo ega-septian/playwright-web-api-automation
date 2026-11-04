@@ -50,6 +50,7 @@ test.describe("POST /brands", () => {
     await test.step("Validate brand is not stored", async () => {
       const brands = await getAllBrands(request);
       expect(brands.filter((b) => b.slug === payload.slug)).toHaveLength(0);
+      expect(brands.filter((b) => b.slug === payload.slug)).toHaveLength(0);
     });
   });
 

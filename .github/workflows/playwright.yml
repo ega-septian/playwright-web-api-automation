@@ -197,6 +197,7 @@ jobs:
             || echo "Belum ada riwayat Allure di $PAGES_URL"
 
       - name: Run Playwright tests
+        continue-on-error: true
         run: npx playwright test
         env:
           # External mode: send to the Tailscale Serve URL; otherwise the throwaway server on localhost.
@@ -210,6 +211,14 @@ jobs:
           # registered by the tests.
           TOOLSHOP_ADMIN_EMAIL: admin@practicesoftwaretesting.com
           TOOLSHOP_ADMIN_PASSWORD: welcome01
+
+      - name: Redline quality gate
+        # Fail only on failed tests without an active quarantine. Quarantined tests still run.
+        if: ${{ !cancelled() }}
+        env:
+          REDLINE_URL: ${{ vars.REDLINE_TAILNET_HOST != '' && format('https://{0}', vars.REDLINE_TAILNET_HOST) || 'http://localhost:8787' }}
+          REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
+        run: node scripts/redline-gate.mts
 
       - name: Build Allure report
         if: ${{ !cancelled() }}

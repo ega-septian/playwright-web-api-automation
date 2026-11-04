@@ -47,6 +47,29 @@ node scripts/redline-impact.mts --files schemas/brand.ts,tests/api/toolshop/bran
 
 Limitations: the graph comes from the last passing run per test; a file no test imports returns no tests, and a new file has no history yet. Ephemeral CI has no history, so the step is skipped. The comment includes a suggested `npx playwright test --grep "(...)"`; CI still runs the full suite until targeted runs are trusted.
 
+## Quarantine and quality gate
+
+Quarantine lives in Redline's Health page. A quarantined test needs an owner, a reason and an expiry (7/14/30 days), and can be released before it expires. Active quarantine is keyed by the `@TC-` ID when present, so a rename keeps it.
+
+`scripts/redline-gate.mts` is the final CI decision:
+
+- reads `test-results/redline-last-run.json`;
+- fetches that run and the active quarantine list from Redline;
+- fails when a `failed` test has no active quarantine;
+- allows failures covered by an active quarantine;
+- treats flaky (passed on retry) and skipped as non-blocking;
+- fails closed when the report is missing, the run has report errors, or Redline cannot be reached.
+
+The test step is `continue-on-error: true`; the gate decides the job status. Tests are not skipped: the full suite still runs, so a quarantined test that starts passing is visible immediately. Expired or released quarantine stops allowing the failure automatically.
+
+Local run, after `npx playwright test`:
+
+```bash
+node scripts/redline-gate.mts
+```
+
+Quarantine is for a known failure with an owner and an end date, not for hiding a new regression.
+
 ## Benchmark
 
 Planted bugs, Claude Haiku 5.5: new test 92–96%, test that passed before 96–100%, app upgrade 6/6, shared code 18/18. **No wrong guesses**; unsure cases are reported as "unclear". Scenarios: `--scenario=history|cold|upgrade|kag|rp`.

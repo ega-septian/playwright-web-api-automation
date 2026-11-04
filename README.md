@@ -86,7 +86,7 @@ The full rules are in [`AGENTS.md`](AGENTS.md). Redline's commands, benchmark an
 | [`ci.yml`](.github/workflows/ci.yml)                 | Types, lint, format, specs load, test case IDs, rule drift, security audit (warning only)                                                                                 |
 | [`playwright.yml`](.github/workflows/playwright.yml) | The API tests against the live demo, with Redline (rules first; AI optional). Run it by hand with target `local` to test against Toolshop in Docker on the runner instead |
 
-On `main`, the Allure report is published to [GitHub Pages](https://ega-septian.github.io/playwright-web-api-automation/), even when tests fail, with a trend across runs. The workflow can also send every run to a persistent Redline on your laptop over Tailscale; see [`docs/redline-tailscale.md`](docs/redline-tailscale.md).
+On `main`, the Allure report is published to [GitHub Pages](https://ega-septian.github.io/playwright-web-api-automation/), even when tests fail, with a trend across runs. The workflow can also send every run to a persistent Redline on your laptop over Tailscale; see [`docs/redline-tailscale.md`](docs/redline-tailscale.md). On pull requests with a persistent Redline, it posts an advisory impact comment listing the tests affected by the changed files; see [`docs/redline.md#pr-impact-advisory`](docs/redline.md#pr-impact-advisory).
 
 ## Project structure
 

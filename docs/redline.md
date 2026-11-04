@@ -26,6 +26,27 @@ Without a Redline server the tests run normally. Set `REDLINE=0` to turn it off,
 
 In CI, Redline normally runs in the same job (DozerDB as a service, Redline pinned to a release) with rules first: without an AI key, causes come from rules only and there is no history from earlier runs. To keep history, comparison and trace/screenshot artifacts across runs without a public server, set the `REDLINE_TAILNET_HOST` repository variable and point the workflow at a Redline on your laptop over Tailscale; see [`redline-tailscale.md`](redline-tailscale.md). The workflow asks for AI when `REDLINE_AI=1`, but the server only calls Claude when it has an `ANTHROPIC_API_KEY`; leave the key empty on a CI-only server to stay rules-only.
 
+## PR impact (advisory)
+
+`scripts/redline-impact.mts` maps the files changed in a pull request to tests through Redline's impact graph and updates one sticky PR comment. The full suite still runs; this is an advisory summary, not a gate.
+
+In CI it runs on pull requests when `REDLINE_TAILNET_HOST` is set, because it needs a persistent Redline with history. The workflow declares `pull-requests: write` for the comment.
+
+Local usage:
+
+```bash
+REDLINE_URL=http://localhost:8787 \
+REDLINE_API_KEY=... \
+node scripts/redline-impact.mts --files schemas/brand.ts,tests/api/toolshop/brand.spec.ts
+```
+
+- `--json` prints machine-readable output.
+- `--base origin/main` changes the git base used when GitHub PR context is unavailable.
+- `--comment` updates the PR comment marked `<!-- redline-impact -->`.
+- Without GITHUB_TOKEN/GITHUB_REPOSITORY, it only prints the Markdown and writes the step summary.
+
+Limitations: the graph comes from the last passing run per test; a file no test imports returns no tests, and a new file has no history yet. Ephemeral CI has no history, so the step is skipped. The comment includes a suggested `npx playwright test --grep "(...)"`; CI still runs the full suite until targeted runs are trusted.
+
 ## Benchmark
 
 Planted bugs, Claude Haiku 5.5: new test 92–96%, test that passed before 96–100%, app upgrade 6/6, shared code 18/18. **No wrong guesses**; unsure cases are reported as "unclear". Scenarios: `--scenario=history|cold|upgrade|kag|rp`.

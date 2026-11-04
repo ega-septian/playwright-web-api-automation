@@ -4,6 +4,7 @@
  *   node scripts/redline-impact.mts --comment
  *   node scripts/redline-impact.mts --files schemas/brand.ts,tests/api/toolshop/brand.spec.ts
  *   node scripts/redline-impact.mts --json
+ *   node scripts/redline-impact.mts --grep
  *
  * In GitHub Actions the impact step needs REDLINE_URL, REDLINE_API_KEY, GITHUB_TOKEN and
  * GITHUB_REPOSITORY. It is advisory: the full suite still runs. The comment is updated in place,
@@ -27,6 +28,7 @@ const valueOf = (name: string) => {
 const base = process.env.REDLINE_BASE || valueOf("--base") || "origin/main";
 const shouldComment = hasFlag("--comment");
 const asJson = hasFlag("--json");
+const asGrep = hasFlag("--grep");
 const explicitFiles = (valueOf("--files") || "")
   .split(",")
   .map((file) => file.trim())
@@ -227,6 +229,12 @@ async function main() {
     }),
   );
   const tests = dedupe(results.flatMap((result) => result.tests));
+
+  if (asGrep) {
+    const ids = tests.map((test) => test.test_case_id).filter((id): id is string => Boolean(id));
+    if (ids.length > 0) console.log(`(${ids.join("|")})`);
+    return;
+  }
 
   if (asJson) {
     console.log(JSON.stringify({ base, files: results, tests }, null, 2));

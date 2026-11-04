@@ -1,7 +1,7 @@
 name: Playwright Tests
-# API tests against the live Toolshop demo (api.practicesoftwaretesting.com) by default. Run the workflow
-# by hand with target "local" to start Toolshop (Practice Software Testing) in Docker on the runner instead,
-# like Toolshop's own workflow (.github/workflows/run-tests.yml in their repo).
+# API tests against Toolshop sprint 5 in Docker on the runner by default, so CI does not depend on
+# the shared public demo. Run the workflow by hand with target "live" for the demo instead; the live
+# demo is shared and its credentials/data can change.
 # Redline normally runs inside the job (DozerDB service + pinned server). Set the repository variable
 # REDLINE_TAILNET_HOST to report to a persistent Redline on your laptop over Tailscale instead; every
 # run then keeps its history. See docs/redline-tailscale.md. Laporan Allure dari main diterbitkan ke
@@ -16,8 +16,13 @@ on:
       target:
         description: Toolshop to test against
         type: choice
-        options: [live, local]
-        default: live
+        options: [local, live]
+        default: local
+      scope:
+        description: Tests to run
+        type: choice
+        options: [full, affected]
+        default: full
 
 concurrency:
   group: playwright-${{ github.ref }}
@@ -28,7 +33,10 @@ permissions:
   pull-requests: write
 
 env:
-  TOOLSHOP_TARGET: ${{ inputs.target || 'live' }}
+  TOOLSHOP_TARGET: ${{ inputs.target || 'local' }}
+  # PRs can opt into affected-only runs with the repository variable REDLINE_PR_SCOPE=affected.
+  # Push/main and manual runs default to full; manual runs can choose affected in the dispatch form.
+  TEST_SCOPE: ${{ github.event_name == 'pull_request' && (vars.REDLINE_PR_SCOPE || 'full') || inputs.scope || 'full' }}
   # Toolshop dikunci ke commit yang sama dengan yang dipakai lokal, supaya hasilnya bisa diulang.
   TOOLSHOP_REF: 5a6ccc2668405c96de9e205beb441f34be8d9ecc
   SPRINT: sprint5
@@ -189,6 +197,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/redline-impact.mts --comment
 
+      - name: Select affected tests
+        id: affected
+        # Opt-in only; no mapped tests or a failed lookup falls back to the full suite.
+        if: env.TEST_SCOPE == 'affected' && env.REDLINE_TAILNET_HOST != ''
+        continue-on-error: true
+        env:
+          REDLINE_URL: https://${{ vars.REDLINE_TAILNET_HOST }}
+          REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          GREP=$(node scripts/redline-impact.mts --grep)
+          echo "grep=$GREP" >> "$GITHUB_OUTPUT"
+          if [ -z "$GREP" ]; then
+            echo "No mapped test; the full suite will run."
+          else
+            echo "Affected tests: $GREP"
+          fi
+
       - name: Previous Allure history
         # Riwayat tren dari laporan terakhir di GitHub Pages. Run pertama belum punya riwayat.
         run: |
@@ -198,8 +224,15 @@ jobs:
 
       - name: Run Playwright tests
         continue-on-error: true
-        run: npx playwright test
+        run: |
+          if [ -n "$TEST_GREP" ]; then
+            echo "Running affected tests: $TEST_GREP"
+            npx playwright test --grep "$TEST_GREP"
+          else
+            npx playwright test
+          fi
         env:
+          TEST_GREP: ${{ steps.affected.outputs.grep }}
           # External mode: send to the Tailscale Serve URL; otherwise the throwaway server on localhost.
           REDLINE_URL: ${{ vars.REDLINE_TAILNET_HOST != '' && format('https://{0}', vars.REDLINE_TAILNET_HOST) || 'http://localhost:8787' }}
           REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}

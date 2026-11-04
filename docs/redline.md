@@ -47,6 +47,12 @@ node scripts/redline-impact.mts --files schemas/brand.ts,tests/api/toolshop/bran
 
 Limitations: the graph comes from the last passing run per test; a file no test imports returns no tests, and a new file has no history yet. Ephemeral CI has no history, so the step is skipped. The comment includes a suggested `npx playwright test --grep "(...)"`; CI still runs the full suite until targeted runs are trusted.
 
+### Targeted PR runs (opt-in)
+
+Set the repository variable `REDLINE_PR_SCOPE=affected` to make pull requests run only the tests mapped by the impact graph. The workflow asks `node scripts/redline-impact.mts --grep` for a Playwright `--grep` pattern and runs that subset. If no test is mapped, the lookup fails, or the step is skipped, the full suite runs instead.
+
+Push to `main` and the nightly/full run stay full. A manual `workflow_dispatch` can choose `scope: affected` to try it. Keep the full suite as the safety net: the graph only knows files seen in earlier runs, so a brand-new file can be missing. `--grep` prints only the pattern, which makes it usable outside Actions too.
+
 ## Quarantine and quality gate
 
 Quarantine lives in Redline's Health page. A quarantined test needs an owner, a reason and an expiry (7/14/30 days), and can be released before it expires. Active quarantine is keyed by the `@TC-` ID when present, so a rename keeps it.

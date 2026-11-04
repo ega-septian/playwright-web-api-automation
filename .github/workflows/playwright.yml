@@ -190,6 +190,8 @@ jobs:
           REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
           # REDLINE_AI=1 meminta analisis; tanpa API key di server, yang dipakai hanya aturan.
           REDLINE_AI: "1"
+          # Batasi jumlah insiden yang dianalisis AI per run; budget harian tetap di server.
+          REDLINE_AI_MAX: "5"
           # Toolshop's seed admin, the same for everyone (live and Docker): not a secret. Customers are
           # registered by the tests.
           TOOLSHOP_ADMIN_EMAIL: admin@practicesoftwaretesting.com

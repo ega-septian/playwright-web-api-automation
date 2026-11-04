@@ -2,11 +2,11 @@ name: Playwright Tests
 # API tests against Toolshop sprint 5 in Docker on the runner by default, so CI does not depend on
 # the shared public demo. Run the workflow by hand with target "live" for the demo instead; the live
 # demo is shared and its credentials/data can change.
-# Redline normally runs inside the job (DozerDB service + pinned server). Set the repository variable
-# REDLINE_TAILNET_HOST to report to a persistent Redline on your laptop over Tailscale instead; every
-# run then keeps its history. A manual dispatch can force the ephemeral backend with `redline: ephemeral`
-# to exercise the seed + quarantine + gate path without changing normal PR runs. See docs/redline-tailscale.md.
-# Laporan Allure dari main diterbitkan ke GitHub Pages; riwayat trennya dibawa dari laporan sebelumnya.
+# Pull requests run an ephemeral Redline inside the job (DozerDB service + pinned server): database baru,
+# contract source di-seed, quarantine dari file. Push main memakai Redline persistent di laptop lewat
+# REDLINE_TAILNET_HOST untuk history/trend/impact; impact dan targeted run bersifat best-effort.
+# A manual dispatch with `redline: ephemeral` forces the self-contained path on a branch or main.
+# See docs/redline-tailscale.md. Laporan Allure dari main diterbitkan ke GitHub Pages.
 on:
   pull_request:
     branches: [main]
@@ -53,9 +53,10 @@ env:
   # Kosong = Redline ephemeral di dalam job. Isi dengan <machine>.<tailnet>.ts.net untuk mengirim
   # report ke Redline persisten di laptop lewat Tailscale (docs/redline-tailscale.md).
   REDLINE_TAILNET_HOST: ${{ vars.REDLINE_TAILNET_HOST }}
-  # Mode efektif: persistent hanya kalau diminta (default) DAN host Tailscale tersedia.
-  # workflow_dispatch bisa memaksa ephemeral untuk menguji jalur seed + gate tanpa mengubah PR harian.
-  REDLINE_MODE: ${{ ((inputs.redline || 'persistent') == 'persistent' && vars.REDLINE_TAILNET_HOST != '') && 'persistent' || 'ephemeral' }}
+  # Test/gate backend: PR selalu ephemeral; main/manual memakai persistent kalau diminta dan host tersedia.
+  REDLINE_MODE: ${{ (github.event_name != 'pull_request' && (inputs.redline || 'persistent') == 'persistent' && vars.REDLINE_TAILNET_HOST != '') && 'persistent' || 'ephemeral' }}
+  # Impact dan targeted run bersifat advisory: boleh memakai Redline persistent walau test berjalan ephemeral.
+  REDLINE_IMPACT: ${{ vars.REDLINE_TAILNET_HOST != '' }}
   PAGES_URL: https://ega-septian.github.io/playwright-web-api-automation
 
 jobs:
@@ -178,7 +179,9 @@ jobs:
             -d '{"project":"toolshop","url":"http://localhost:8091/docs"}'
 
       - name: Connect to Tailscale
-        if: env.REDLINE_MODE == 'persistent'
+        # PR ephemeral: Tailscale hanya untuk impact lookup, jadi kegagalannya tidak boleh memblokir test.
+        if: env.REDLINE_IMPACT == 'true' && (env.REDLINE_MODE == 'persistent' || github.event_name == 'pull_request')
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         uses: tailscale/github-action@v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
@@ -187,7 +190,8 @@ jobs:
           ping: ${{ vars.REDLINE_TAILNET_HOST }}
 
       - name: Check external Redline
-        if: env.REDLINE_MODE == 'persistent'
+        if: env.REDLINE_IMPACT == 'true' && (env.REDLINE_MODE == 'persistent' || github.event_name == 'pull_request')
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
         run: |
@@ -207,7 +211,7 @@ jobs:
 
       - name: Redline impact
         # Advisory: map changed files to tests and update one PR comment. The full suite still runs.
-        if: github.event_name == 'pull_request' && env.REDLINE_MODE == 'persistent'
+        if: github.event_name == 'pull_request' && env.REDLINE_IMPACT == 'true'
         continue-on-error: true
         env:
           REDLINE_URL: https://${{ vars.REDLINE_TAILNET_HOST }}
@@ -218,7 +222,7 @@ jobs:
       - name: Select affected tests
         id: affected
         # Opt-in only; no mapped tests or a failed lookup falls back to the full suite.
-        if: env.TEST_SCOPE == 'affected' && env.REDLINE_MODE == 'persistent'
+        if: env.TEST_SCOPE == 'affected' && env.REDLINE_IMPACT == 'true'
         continue-on-error: true
         env:
           REDLINE_URL: https://${{ vars.REDLINE_TAILNET_HOST }}

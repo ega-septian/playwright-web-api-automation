@@ -24,21 +24,19 @@ The reporter, the fixture and the CLI come from the Redline repo as the `redline
 
 Without a Redline server the tests run normally. Set `REDLINE=0` to turn it off, for example in `.env` while writing tests. `REDLINE_AI=1` or `REDLINE_VERIFY=1` on the command line turn it back on for that run; whatever you type on the command line wins over `.env`. If the Redline server has an API key, put the same `REDLINE_API_KEY` in `.env` (and `REDLINE_URL` if it is not on `localhost:8787`).
 
-In CI, Redline normally runs in the same job (DozerDB as a service, Redline pinned to a release) with rules first: without an AI key, causes come from rules only and there is no history from earlier runs. To keep history, comparison and trace/screenshot artifacts across runs without a public server, set the `REDLINE_TAILNET_HOST` repository variable and point the workflow at a Redline on your laptop over Tailscale; see [`redline-tailscale.md`](redline-tailscale.md). The workflow asks for AI when `REDLINE_AI=1`, but the server only calls Claude when it has an `ANTHROPIC_API_KEY`; leave the key empty on a CI-only server to stay rules-only.
+In CI, pull requests run a **self-contained Redline** in the job (DozerDB as a service, Redline pinned to a release): a fresh database, the contract source seeded from the in-job Toolshop, and quarantines read from `redline-quarantine.json`. Push to `main` uses the persistent Redline when the `REDLINE_TAILNET_HOST` repository variable is set, so history, trends, artifacts and the impact graph survive across runs; see [`redline-tailscale.md`](redline-tailscale.md). The impact comment and targeted runs are advisory: on PRs they still try the persistent server over Tailscale, but an offline laptop only skips that lookup — the suite and gate run on the ephemeral server, and targeted runs fall back to the full suite. The workflow asks for AI when `REDLINE_AI=1`, but the server only calls Claude when it has an `ANTHROPIC_API_KEY`; leave the key empty on a CI-only server to stay rules-only.
 
 Contract sources live in Redline's database. The ephemeral job seeds `toolshop` from the in-job Toolshop (`http://localhost:8091/docs`) right after the server starts, while a persistent Redline keeps the sources saved in Config across runs.
 
 ### Manual ephemeral run
 
-To exercise the self-contained path without changing normal CI, run **Playwright Tests** manually with `redline: ephemeral` (Actions → Run workflow). In that mode the job ignores `REDLINE_TAILNET_HOST`, starts Redline and its database inside the runner, seeds the contract, runs the suite, and applies the same gate using `redline-quarantine.json`. The job uploads `redline-report` (`redline-report.md`, `redline-last-run.json`, `results.json`) so debugging does not depend on the laptop.
-
-Pick the branch in the Run workflow dialog before merging; normal PR and push runs keep using the persistent Redline while `REDLINE_TAILNET_HOST` is set.
+Pull requests already use the ephemeral backend. A manual dispatch with `redline: ephemeral` forces the same path on a branch or on `main`, useful after a workflow change: it ignores `REDLINE_TAILNET_HOST`, starts Redline and its database inside the runner, seeds the contract, runs the suite, and applies the gate using `redline-quarantine.json`. The `redline-report` artifact contains `redline-report.md`, `redline-last-run.json` and `results.json`, so debugging does not depend on the laptop.
 
 ## PR impact (advisory)
 
 `scripts/redline-impact.mts` maps the files changed in a pull request to tests through Redline's impact graph and updates one sticky PR comment. The full suite still runs; this is an advisory summary, not a gate.
 
-In CI it runs on pull requests when `REDLINE_TAILNET_HOST` is set, because it needs a persistent Redline with history. The workflow declares `pull-requests: write` for the comment.
+In CI it runs on pull requests when `REDLINE_TAILNET_HOST` is set, even though the tests themselves run ephemeral; it needs a persistent Redline with history. The step is best-effort (`continue-on-error`), so an offline laptop does not block the PR and the suite falls back to full. The workflow declares `pull-requests: write` for the comment.
 
 Local usage:
 

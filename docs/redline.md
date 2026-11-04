@@ -57,14 +57,29 @@ Push to `main` and the nightly/full run stay full. A manual `workflow_dispatch` 
 
 ## Quarantine and quality gate
 
-Quarantine lives in Redline's Health page. A quarantined test needs an owner, a reason and an expiry (7/14/30 days), and can be released before it expires. Active quarantine is keyed by the `@TC-` ID when present, so a rename keeps it.
+Quarantine has two sources: Redline's Health page and `redline-quarantine.json` in this repo (quarantine as code). A quarantined test needs an owner, a reason and an expiry, and can be released before it expires. Active quarantine is keyed by the `@TC-` ID when present, so a rename keeps it.
+
+The file is what makes an ephemeral Redline work: a fresh CI database has no quarantine history, so known failures are read from the repository instead.
+
+```json
+[
+  {
+    "test": "TC-BRD-019",
+    "owner": "ega",
+    "reason": "Flaky on the shared demo; see run #123",
+    "until": "2026-12-01"
+  }
+]
+```
+
+Rules: `until` is `YYYY-MM-DD`, at most 90 days ahead, and an entry that has passed its date is reported as expired and ignored. Duplicate `test`, unknown fields and malformed dates fail `npm run check:quarantine` (and the gate). The file is validated in the `CI` workflow, before any test runs.
 
 `scripts/redline-gate.mts` is the final CI decision:
 
 - reads `test-results/redline-last-run.json`;
-- fetches that run and the active quarantine list from Redline;
-- fails when a `failed` test has no active quarantine;
-- allows failures covered by an active quarantine;
+- fetches that run and the active quarantine list from Redline, then merges `redline-quarantine.json`;
+- fails when a `failed` test has no active quarantine from either source;
+- allows failures covered by the quarantine file or by a Redline UI quarantine;
 - treats flaky (passed on retry) and skipped as non-blocking;
 - fails closed when the report is missing, the run has report errors, or Redline cannot be reached.
 
@@ -75,6 +90,8 @@ Local run, after `npx playwright test`:
 ```bash
 node scripts/redline-gate.mts
 ```
+
+File-based quarantines are enforced by the gate and shown in its summary, but they do not appear on Redline's Health page yet: that page reads the database. Create the same quarantine in the UI when you also want it visible there.
 
 Quarantine is for a known failure with an owner and an end date, not for hiding a new regression.
 

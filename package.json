@@ -19,6 +19,7 @@
     "check:weakening": "node scripts/check-weakening.mts",
     "check:drift": "node scripts/check-drift.mts",
     "check:redline-ref": "node scripts/check-redline-ref.mts",
+    "check:quarantine": "node scripts/check-quarantine.mts",
     "contract": "node scripts/contract.mts",
     "report:allure": "allure generate",
     "report:allure:open": "allure open test-results/allure-report"

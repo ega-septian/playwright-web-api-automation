@@ -4,8 +4,9 @@ name: Playwright Tests
 # demo is shared and its credentials/data can change.
 # Redline normally runs inside the job (DozerDB service + pinned server). Set the repository variable
 # REDLINE_TAILNET_HOST to report to a persistent Redline on your laptop over Tailscale instead; every
-# run then keeps its history. See docs/redline-tailscale.md. Laporan Allure dari main diterbitkan ke
-# GitHub Pages; riwayat trennya dibawa dari laporan sebelumnya.
+# run then keeps its history. A manual dispatch can force the ephemeral backend with `redline: ephemeral`
+# to exercise the seed + quarantine + gate path without changing normal PR runs. See docs/redline-tailscale.md.
+# Laporan Allure dari main diterbitkan ke GitHub Pages; riwayat trennya dibawa dari laporan sebelumnya.
 on:
   pull_request:
     branches: [main]
@@ -23,6 +24,11 @@ on:
         type: choice
         options: [full, affected]
         default: full
+      redline:
+        description: Redline backend
+        type: choice
+        options: [persistent, ephemeral]
+        default: persistent
 
 concurrency:
   group: playwright-${{ github.ref }}
@@ -47,6 +53,9 @@ env:
   # Kosong = Redline ephemeral di dalam job. Isi dengan <machine>.<tailnet>.ts.net untuk mengirim
   # report ke Redline persisten di laptop lewat Tailscale (docs/redline-tailscale.md).
   REDLINE_TAILNET_HOST: ${{ vars.REDLINE_TAILNET_HOST }}
+  # Mode efektif: persistent hanya kalau diminta (default) DAN host Tailscale tersedia.
+  # workflow_dispatch bisa memaksa ephemeral untuk menguji jalur seed + gate tanpa mengubah PR harian.
+  REDLINE_MODE: ${{ ((inputs.redline || 'persistent') == 'persistent' && vars.REDLINE_TAILNET_HOST != '') && 'persistent' || 'ephemeral' }}
   PAGES_URL: https://ega-septian.github.io/playwright-web-api-automation
 
 jobs:
@@ -76,10 +85,10 @@ jobs:
 
       - name: Redline mode
         run: |
-          if [ -n "$REDLINE_TAILNET_HOST" ]; then
+          if [ "$REDLINE_MODE" = "persistent" ]; then
             echo "Reporting to persistent Redline at https://$REDLINE_TAILNET_HOST"
           else
-            echo "Starting a throwaway Redline in this job"
+            echo "Starting a throwaway Redline in this job (ephemeral mode)"
           fi
 
       - name: Checkout Toolshop
@@ -132,7 +141,7 @@ jobs:
           echo "API tidak menjawab di http://localhost:8091/status"; exit 1
 
       - name: Checkout Redline
-        if: env.REDLINE_TAILNET_HOST == ''
+        if: env.REDLINE_MODE == 'ephemeral'
         uses: actions/checkout@v4
         with:
           repository: ega-septian/redline
@@ -140,13 +149,13 @@ jobs:
           path: redline
 
       - uses: actions/setup-go@v5
-        if: env.REDLINE_TAILNET_HOST == ''
+        if: env.REDLINE_MODE == 'ephemeral'
         with:
           go-version-file: redline/go.mod
           cache-dependency-path: redline/go.sum
 
       - name: Start Redline
-        if: env.REDLINE_TAILNET_HOST == ''
+        if: env.REDLINE_MODE == 'ephemeral'
         working-directory: redline
         # Tanpa ANTHROPIC_API_KEY: kegagalan dijelaskan dengan aturan saja (tanpa biaya). Database baru setiap
         # run, jadi belum ada riwayat "terakhir lulus" untuk dibandingkan.
@@ -160,7 +169,7 @@ jobs:
           echo "Redline tidak menjawab di http://localhost:8787/healthz"; cat redline.log; exit 1
 
       - name: Seed Redline contract source
-        if: env.REDLINE_TAILNET_HOST == ''
+        if: env.REDLINE_MODE == 'ephemeral'
         # Contract sources hanya dibaca dari database. Database CI kosong setiap run, jadi sumbernya diisi
         # lewat API setelah server hidup; URL memakai Toolshop yang berjalan di job yang sama.
         run: |
@@ -169,7 +178,7 @@ jobs:
             -d '{"project":"toolshop","url":"http://localhost:8091/docs"}'
 
       - name: Connect to Tailscale
-        if: env.REDLINE_TAILNET_HOST != ''
+        if: env.REDLINE_MODE == 'persistent'
         uses: tailscale/github-action@v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
@@ -178,7 +187,7 @@ jobs:
           ping: ${{ vars.REDLINE_TAILNET_HOST }}
 
       - name: Check external Redline
-        if: env.REDLINE_TAILNET_HOST != ''
+        if: env.REDLINE_MODE == 'persistent'
         env:
           REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
         run: |
@@ -198,7 +207,7 @@ jobs:
 
       - name: Redline impact
         # Advisory: map changed files to tests and update one PR comment. The full suite still runs.
-        if: github.event_name == 'pull_request' && env.REDLINE_TAILNET_HOST != ''
+        if: github.event_name == 'pull_request' && env.REDLINE_MODE == 'persistent'
         continue-on-error: true
         env:
           REDLINE_URL: https://${{ vars.REDLINE_TAILNET_HOST }}
@@ -209,7 +218,7 @@ jobs:
       - name: Select affected tests
         id: affected
         # Opt-in only; no mapped tests or a failed lookup falls back to the full suite.
-        if: env.TEST_SCOPE == 'affected' && env.REDLINE_TAILNET_HOST != ''
+        if: env.TEST_SCOPE == 'affected' && env.REDLINE_MODE == 'persistent'
         continue-on-error: true
         env:
           REDLINE_URL: https://${{ vars.REDLINE_TAILNET_HOST }}
@@ -243,7 +252,7 @@ jobs:
         env:
           TEST_GREP: ${{ steps.affected.outputs.grep }}
           # External mode: send to the Tailscale Serve URL; otherwise the throwaway server on localhost.
-          REDLINE_URL: ${{ vars.REDLINE_TAILNET_HOST != '' && format('https://{0}', vars.REDLINE_TAILNET_HOST) || 'http://localhost:8787' }}
+          REDLINE_URL: ${{ env.REDLINE_MODE == 'persistent' && format('https://{0}', vars.REDLINE_TAILNET_HOST) || 'http://localhost:8787' }}
           REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
           # REDLINE_AI=1 meminta analisis; tanpa API key di server, yang dipakai hanya aturan.
           REDLINE_AI: "1"
@@ -258,7 +267,7 @@ jobs:
         # Fail only on failed tests without an active quarantine. Quarantined tests still run.
         if: ${{ !cancelled() }}
         env:
-          REDLINE_URL: ${{ vars.REDLINE_TAILNET_HOST != '' && format('https://{0}', vars.REDLINE_TAILNET_HOST) || 'http://localhost:8787' }}
+          REDLINE_URL: ${{ env.REDLINE_MODE == 'persistent' && format('https://{0}', vars.REDLINE_TAILNET_HOST) || 'http://localhost:8787' }}
           REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
         run: node scripts/redline-gate.mts
 
@@ -275,7 +284,7 @@ jobs:
         run: docker compose logs --tail=200 laravel-api web mariadb
 
       - name: Redline logs (on failure)
-        if: failure() && env.REDLINE_TAILNET_HOST == ''
+        if: failure() && env.REDLINE_MODE == 'ephemeral'
         run: tail -100 redline/redline.log || true
 
       - uses: actions/upload-artifact@v4
@@ -290,6 +299,17 @@ jobs:
         with:
           name: allure-report
           path: test-results/allure-report/
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: redline-report
+          path: |
+            test-results/redline-report.md
+            test-results/redline-last-run.json
+            test-results/results.json
+          if-no-files-found: ignore
           retention-days: 30
 
       - name: Upload report for GitHub Pages

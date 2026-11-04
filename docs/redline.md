@@ -26,6 +26,8 @@ Without a Redline server the tests run normally. Set `REDLINE=0` to turn it off,
 
 In CI, Redline normally runs in the same job (DozerDB as a service, Redline pinned to a release) with rules first: without an AI key, causes come from rules only and there is no history from earlier runs. To keep history, comparison and trace/screenshot artifacts across runs without a public server, set the `REDLINE_TAILNET_HOST` repository variable and point the workflow at a Redline on your laptop over Tailscale; see [`redline-tailscale.md`](redline-tailscale.md). The workflow asks for AI when `REDLINE_AI=1`, but the server only calls Claude when it has an `ANTHROPIC_API_KEY`; leave the key empty on a CI-only server to stay rules-only.
 
+Contract sources live in Redline's database. The ephemeral job seeds `toolshop` from the in-job Toolshop (`http://localhost:8091/docs`) right after the server starts, while a persistent Redline keeps the sources saved in Config across runs.
+
 ## PR impact (advisory)
 
 `scripts/redline-impact.mts` maps the files changed in a pull request to tests through Redline's impact graph and updates one sticky PR comment. The full suite still runs; this is an advisory summary, not a gate.

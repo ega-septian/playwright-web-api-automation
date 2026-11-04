@@ -43,7 +43,7 @@ env:
   DISABLE_LOGGING: "true"
   # Versi Redline yang dipakai di CI, dikunci supaya hasilnya bisa diulang. Harus sama dengan tag
   # paket redline-playwright di package.json; `npm run check:redline-ref` menjaga keduanya.
-  REDLINE_REF: v0.7.0
+  REDLINE_REF: v0.8.0
   # Kosong = Redline ephemeral di dalam job. Isi dengan <machine>.<tailnet>.ts.net untuk mengirim
   # report ke Redline persisten di laptop lewat Tailscale (docs/redline-tailscale.md).
   REDLINE_TAILNET_HOST: ${{ vars.REDLINE_TAILNET_HOST }}
@@ -158,6 +158,15 @@ jobs:
             sleep 1
           done
           echo "Redline tidak menjawab di http://localhost:8787/healthz"; cat redline.log; exit 1
+
+      - name: Seed Redline contract source
+        if: env.REDLINE_TAILNET_HOST == ''
+        # Contract sources hanya dibaca dari database. Database CI kosong setiap run, jadi sumbernya diisi
+        # lewat API setelah server hidup; URL memakai Toolshop yang berjalan di job yang sama.
+        run: |
+          curl -fsS -X PUT http://localhost:8787/api/config/contracts \
+            -H "Content-Type: application/json" \
+            -d '{"project":"toolshop","url":"http://localhost:8091/docs"}'
 
       - name: Connect to Tailscale
         if: env.REDLINE_TAILNET_HOST != ''

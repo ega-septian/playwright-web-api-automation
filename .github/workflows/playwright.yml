@@ -23,6 +23,10 @@ concurrency:
   group: playwright-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   TOOLSHOP_TARGET: ${{ inputs.target || 'live' }}
   # Toolshop dikunci ke commit yang sama dengan yang dipakai lokal, supaya hasilnya bisa diulang.
@@ -174,6 +178,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Redline impact
+        # Advisory: map changed files to tests and update one PR comment. The full suite still runs.
+        if: github.event_name == 'pull_request' && env.REDLINE_TAILNET_HOST != ''
+        continue-on-error: true
+        env:
+          REDLINE_URL: https://${{ vars.REDLINE_TAILNET_HOST }}
+          REDLINE_API_KEY: ${{ secrets.REDLINE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/redline-impact.mts --comment
 
       - name: Previous Allure history
         # Riwayat tren dari laporan terakhir di GitHub Pages. Run pertama belum punya riwayat.

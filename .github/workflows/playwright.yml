@@ -49,7 +49,7 @@ env:
   DISABLE_LOGGING: "true"
   # Versi Redline yang dipakai di CI, dikunci supaya hasilnya bisa diulang. Harus sama dengan tag
   # paket redline-playwright di package.json; `npm run check:redline-ref` menjaga keduanya.
-  REDLINE_REF: v1.19.0
+  REDLINE_REF: v1.20.0
   # Kosong = Redline ephemeral di dalam job. Isi dengan <machine>.<tailnet>.ts.net untuk mengirim
   # report ke Redline persisten di laptop lewat Tailscale (docs/redline-tailscale.md).
   REDLINE_TAILNET_HOST: ${{ vars.REDLINE_TAILNET_HOST }}

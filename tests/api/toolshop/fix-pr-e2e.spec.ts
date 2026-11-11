@@ -10,6 +10,6 @@ const BrandSchema = z.strictObject({
 test("fix PR pilot", { tag: "@TC-PILOT-PR-001" }, async ({ request }) => {
   const response = await request.get("/brands");
   expect(response.status()).toBe(200);
-  const brands = z.array(BrandSchema).parse(response.json());
+  const brands = z.array(BrandSchema).parse(await response.json());
   expect(brands.length).toBeGreaterThan(0);
 });
